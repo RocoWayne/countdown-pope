@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.29 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.30 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -69,6 +69,11 @@
   En modo llegada también se oculta la barra roja fina del panel lateral
   (era un detalle del panel angosto, no de la pantalla completa) y las
   fotos pasan a centrarse enteras en vez de forzar la parte superior.
+  Para probar la pantalla de llegada sin tocar la consola: abrir con
+  ?arrived=1 en la URL (ej. countdown.html?arrived=1), ver FORCE_ARRIVED
+  en CONFIGURACIÓN. El botón de silenciar música siempre arranca en
+  "sonido activado" al cargar la página — el mute es una acción opcional
+  del usuario, no se guarda entre cargas a propósito.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -683,6 +688,13 @@
     // Editar acá cuando se confirme el horario exacto de la visita.
     const TARGET_DATE = new Date("2026-11-08T12:00:00-03:00");
 
+    // Modo de prueba: abrir la página con ?arrived=1 en la URL (ej.
+    // countdown.html?arrived=1) fuerza el modo "el Papa ya llegó" apenas
+    // carga, sin tocar TARGET_DATE ni pasar por la consola del navegador.
+    // Útil para revisar el look de la pantalla de llegada antes del
+    // evento. No afecta nada si el parámetro no está en la URL.
+    const FORCE_ARRIVED = new URLSearchParams(window.location.search).get("arrived") === "1";
+
     // Cada cuánto cambia el dato de la caja de trivia (en milisegundos).
     // Ej: 45000 = 45 segundos. Se lee de trivia.json (ver abajo del todo).
     const TRIVIA_INTERVAL_MS = 45000;
@@ -764,7 +776,7 @@
 
     function tick() {
       const now = new Date();
-      let diff = TARGET_DATE.getTime() - now.getTime();
+      let diff = FORCE_ARRIVED ? -1 : TARGET_DATE.getTime() - now.getTime();
 
       if (diff <= 0) {
         document.getElementById("countdown").innerHTML =
@@ -784,8 +796,14 @@
       document.getElementById("seconds").textContent = pad(seconds);
     }
 
-    tick();
+    // El intervalo se asigna ANTES del primer tick() (no después): así, si
+    // la página se carga cuando TARGET_DATE ya pasó (por ejemplo, se
+    // reinicia la fuente de OBS un día después de la visita), tick()
+    // puede frenar tickIntervalId en su primera ejecución. Con el orden
+    // inverso, tickIntervalId todavía sería null en ese primer llamado y
+    // el intervalo quedaría corriendo para siempre sin ningún efecto.
     tickIntervalId = setInterval(tick, 1000);
+    tick();
 
     // Slideshow de fondo: lee la lista de archivos desde manifest.json
     // (generado automáticamente) y solo agrega las imágenes que

@@ -16,6 +16,11 @@ Estas carpetas/archivos se editan directo, sin necesidad de tocar el HTML:
 - **`cta.json`** — preguntas del popup "Participá" que invita a comentar
   en el chat (mismo formato que `trivia.json`).
 
+El botón de silenciar música (arriba a la izquierda) siempre arranca en
+"sonido activado" cada vez que se carga la página — el mute es una
+acción opcional del usuario, a propósito no se guarda entre cargas para
+que la transmisión nunca arranque en silencio por accidente.
+
 La página vuelve a leer estos cuatro archivos sola cada 24 horas
 (`CONTENT_REFRESH_MS`), así que el contenido nuevo se refleja en una
 transmisión ya en vivo sin tener que reiniciar la fuente de OBS a mano.
@@ -64,17 +69,25 @@ también frena los timers que ya no tienen nada que mostrar: el `tick()`
 del countdown, la rotación de trivia y el ciclo del popup de chat. Así no
 quedan corriendo de fondo para siempre sin ningún efecto visible.
 
-**Cómo probarlo sin esperar a la fecha real:** abrir `countdown.html` en
-el navegador, esperar unos segundos a que carguen música y fotos, abrir
-la consola (F12) y ejecutar:
+**Cómo probarlo sin esperar a la fecha real — modo `?arrived=1`:** abrir
+la página con ese parámetro en la URL, por ejemplo:
 
-```js
-TARGET_DATE.setTime(Date.now() - 1000)
+```
+countdown.html?arrived=1
 ```
 
-Esto no modifica el archivo ni el repositorio — solo mueve la fecha
-objetivo al pasado en esa pestaña, para ver la transición en vivo. En el
-siguiente `tick()` (menos de 1 segundo) se activa el modo de llegada.
+o, ya publicado en GitHub Pages, algo como
+`https://<usuario>.github.io/countdown-pope/countdown.html?arrived=1`.
+Fuerza el modo de llegada apenas carga la página (ver `FORCE_ARRIVED` en
+`CONFIGURACIÓN`), sin tocar `TARGET_DATE` ni necesitar la consola del
+navegador — cómodo para que cualquiera del equipo revise el look antes
+del evento, no solo quien sabe abrir DevTools. Sacar el `?arrived=1` de
+la URL vuelve al countdown normal.
+
+**Alternativa por consola** (si prefieren no tocar la URL): abrir
+`countdown.html`, esperar unos segundos a que carguen música y fotos,
+abrir la consola (F12) y ejecutar `TARGET_DATE.setTime(Date.now() - 1000)`.
+Ninguna de las dos formas modifica el archivo ni el repositorio.
 
 ## Hardening para transmisiones largas (60+ días corridos)
 
