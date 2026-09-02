@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.27 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.28 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -59,11 +59,19 @@
   temas de la playlist de música seguidos (ej. manifest desincronizado),
   se espera MUSIC_ERROR_BACKOFF_MS antes de reintentar en vez de entrar
   en un loop de reintentos sin parar.
+  Más hardening: al entrar en modo llegada se frenan los timers de
+  countdown/trivia/CTA (no tiene sentido dejarlos corriendo de fondo para
+  siempre, ese modo no tiene vuelta atrás); si music/manifest.json queda
+  vacío a propósito se corta la reproducción en vez de dejar sonando lo
+  último que había en memoria; y los errores de red/audio/imagen quedan
+  logueados en la consola del navegador (prefijo "[countdown]") para
+  poder diagnosticar a distancia si algo falla en una transmisión larga.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Visita Papal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -716,6 +724,14 @@
     let arrivalModeActive = false;
     const arrivalMessageEl = document.getElementById("arrivalMessage");
 
+    // IDs de los timers de countdown/trivia/CTA, para poder frenarlos en
+    // activateArrivalMode(). No hay "vuelta atrás" desde ese modo, así que
+    // no tiene sentido dejarlos corriendo de fondo para siempre.
+    let tickIntervalId = null;
+    let triviaIntervalId = null;
+    let ctaTimeoutId = null;
+    let ctaIntervalId = null;
+
     function activateArrivalMode() {
       if (arrivalModeActive) return;
       arrivalModeActive = true;
@@ -723,6 +739,10 @@
       requestAnimationFrame(() => {
         arrivalMessageEl.classList.add("show");
       });
+      if (tickIntervalId) clearInterval(tickIntervalId);
+      if (triviaIntervalId) clearInterval(triviaIntervalId);
+      if (ctaTimeoutId) clearTimeout(ctaTimeoutId);
+      if (ctaIntervalId) clearInterval(ctaIntervalId);
     }
 
     function tick() {
@@ -748,7 +768,7 @@
     }
 
     tick();
-    setInterval(tick, 1000);
+    tickIntervalId = setInterval(tick, 1000);
 
     // Slideshow de fondo: lee la lista de archivos desde manifest.json
     // (generado automáticamente) y solo agrega las imágenes que
@@ -772,6 +792,7 @@
           settled = true;
           // No pudimos confirmar que cargó a tiempo: la tratamos como
           // fallida para esta vuelta, sin bloquear el resto del carrusel.
+          console.warn("[countdown] timeout cargando imagen, se saltea por ahora:", url);
           resolve(null);
         }, FETCH_TIMEOUT_MS);
         img.onload = () => {
@@ -801,6 +822,7 @@
         // Sin servidor (ej. abierto como archivo local), timeout, o fetch()
         // fallando por CORS; el panel simplemente queda liso, sin romper
         // la página.
+        console.warn("[countdown] no se pudo cargar images/manifest.json:", err);
         return [];
       }
     }
@@ -968,8 +990,10 @@
     player.addEventListener("error", () => {
       if (playlist.length === 0) return;
       consecutiveTrackErrors++;
+      console.warn("[countdown] falló el tema en curso:", player.src);
       if (consecutiveTrackErrors >= playlist.length) {
         consecutiveTrackErrors = 0;
+        console.warn("[countdown] fallaron todos los temas de la playlist seguidos, reintentando en " + (MUSIC_ERROR_BACKOFF_MS / 1000) + "s.");
         setTimeout(playNextTrack, MUSIC_ERROR_BACKOFF_MS);
         return;
       }
@@ -986,7 +1010,23 @@
         const res = await fetchWithTimeout(MUSIC_MANIFEST_URL);
         if (!res.ok) return;
         const files = await res.json();
-        if (!Array.isArray(files) || files.length === 0) return;
+        if (!Array.isArray(files)) return;
+        if (files.length === 0) {
+          // Carpeta de música vaciada a propósito: cortar la reproducción
+          // en vez de dejar sonando para siempre lo último que había en
+          // memoria.
+          if (playlist.length > 0) {
+            playlist = [];
+            playOrder = [];
+            orderIndex = 0;
+            player.pause();
+            player.removeAttribute("src");
+            player.load();
+            nowPlayingEl.classList.remove("visible");
+            console.warn("[countdown] music/manifest.json quedó vacío: se corta la música.");
+          }
+          return;
+        }
         const isFirstLoad = playlist.length === 0;
         playlist = files;
         if (isFirstLoad) {
@@ -995,8 +1035,7 @@
           playCurrent();
         }
       } catch (err) {
-        // Sin música configurada o sin servidor (file://): la página
-        // sigue funcionando igual, en silencio.
+        console.warn("[countdown] no se pudo cargar music/manifest.json:", err);
       }
     }
 
@@ -1065,12 +1104,11 @@
           triviaTextEl.textContent = triviaOrder[0];
           triviaBox.classList.add("visible");
           if (triviaItems.length > 1) {
-            setInterval(nextTrivia, TRIVIA_INTERVAL_MS);
+            triviaIntervalId = setInterval(nextTrivia, TRIVIA_INTERVAL_MS);
           }
         }
       } catch (err) {
-        // Sin trivia.json o sin servidor (file://): la caja simplemente
-        // no se muestra.
+        console.warn("[countdown] no se pudo cargar trivia.json:", err);
       }
     }
 
@@ -1132,14 +1170,13 @@
         if (isFirstLoad) {
           ctaOrder = buildCtaOrder(null);
           ctaOrderIndex = 0;
-          setTimeout(() => {
+          ctaTimeoutId = setTimeout(() => {
             showChatPopup();
-            setInterval(showChatPopup, CTA_INTERVAL_MS);
+            ctaIntervalId = setInterval(showChatPopup, CTA_INTERVAL_MS);
           }, CTA_FIRST_DELAY_MS);
         }
       } catch (err) {
-        // Sin cta.json o sin servidor (file://): la caja simplemente
-        // no se muestra.
+        console.warn("[countdown] no se pudo cargar cta.json:", err);
       }
     }
 
