@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.21 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.22 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -155,7 +155,9 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 0 4vw 7vh 4vw;
+    /* padding-top deja aire libre bajo el chip de música fijo
+       (arriba a la izquierda) para que nunca lo toque. */
+    padding: 9vh 4vw 7vh 4vw;
   }
 
   .eyebrow {
