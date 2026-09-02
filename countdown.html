@@ -1,14 +1,15 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.8 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.9 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
   /images se usa, sin convención de nombre. Ver images/README.md.
-  El zócalo de noticias (news.json, scripts/fetch_news.py) está oculto
-  por ahora a pedido — el código queda intacto, ver comentarios en el
-  CSS (.zocalo) y en el JS (loadNewsTicker) para reactivarlo.
+  El zócalo de noticias (news.json, scripts/fetch_news.py) y el texto
+  "Papa León XIV / Rumbo a la Argentina" sobre la foto están ocultos
+  por ahora a pedido — el código queda intacto (ver .zocalo y
+  .photo-caption en el CSS, y loadNewsTicker en el JS) para reactivarlos.
   La música de fondo se lee de /music/manifest.json (mismo mecanismo que
   las imágenes) y se reproduce siempre en orden aleatorio, sin repetir
   un tema hasta que suenen todos los demás. Ver music/README.md.
@@ -86,7 +87,10 @@
     z-index: 3;
   }
 
+  /* Oculto por ahora a pedido. El HTML se deja intacto (línea con
+     class="photo-caption") — para reactivarlo, volver a "block". */
   .photo-caption {
+    display: none;
     position: absolute;
     left: 3vw;
     bottom: 3vh;
