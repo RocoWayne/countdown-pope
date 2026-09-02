@@ -96,7 +96,9 @@ def scrape_html(html, base_url):
     domain = urlparse(base_url).netloc
 
     for a in soup.find_all("a", href=True):
-        text = a.get_text(strip=True)
+        # separator=" " evita que texto en tags anidados (ej. un span
+        # resaltado dentro del título) quede pegado sin espacio.
+        text = re.sub(r"\s+", " ", a.get_text(" ", strip=True))
         href = a["href"]
         if not text or len(text) < 25:
             continue
