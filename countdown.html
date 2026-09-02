@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.9 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.10 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -12,7 +12,8 @@
   .photo-caption en el CSS, y loadNewsTicker en el JS) para reactivarlos.
   La música de fondo se lee de /music/manifest.json (mismo mecanismo que
   las imágenes) y se reproduce siempre en orden aleatorio, sin repetir
-  un tema hasta que suenen todos los demás. Ver music/README.md.
+  un tema hasta que suenen todos los demás. Ver music/README.md. El chip
+  "now playing" está anclado arriba a la izquierda.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -315,7 +316,7 @@
   .now-playing {
     position: fixed;
     top: 1.6vh;
-    right: 1.6vw;
+    left: 1.6vw;
     z-index: 7;
     display: none;
     align-items: center;
