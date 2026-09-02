@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.2 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.3 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada, zócalo).
+  Se sacó el header/topbar superior: no era necesario.
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
   /images se usa, sin convención de nombre. Ver images/README.md.
@@ -104,89 +105,6 @@
     margin-bottom: 0.4vh;
   }
 
-  /* ===== Topbar ===== */
-  .topbar {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%;
-    height: 9vh;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 3vw;
-    background: var(--paper);
-    border-bottom: 1px solid var(--hair);
-    z-index: 5;
-  }
-
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 0.9vw;
-  }
-
-  .brand-mark {
-    width: 2.6vw;
-    height: 2.6vw;
-    min-width: 34px;
-    min-height: 34px;
-    border-radius: 50%;
-    background: var(--red);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-family: 'Archivo Black', sans-serif;
-    font-size: 1.1vw;
-  }
-
-  .brand-text {
-    font-family: 'Barlow Condensed', sans-serif;
-    font-weight: 700;
-    text-transform: uppercase;
-    font-size: 1.15vw;
-    letter-spacing: 0.06em;
-    color: var(--ink);
-  }
-
-  .brand-text small {
-    display: block;
-    font-family: 'Inter', sans-serif;
-    font-weight: 500;
-    text-transform: none;
-    letter-spacing: 0.02em;
-    font-size: 0.7vw;
-    color: var(--ink-dim);
-  }
-
-  .live-pill {
-    display: flex;
-    align-items: center;
-    gap: 0.55vw;
-    padding: 0.6vh 1vw;
-    border-radius: 999px;
-    border: 1.5px solid var(--red);
-    font-family: 'Inter', sans-serif;
-    font-weight: 600;
-    font-size: 0.85vw;
-    color: var(--red-dark);
-  }
-
-  .live-dot {
-    width: 0.55vw;
-    height: 0.55vw;
-    min-width: 8px;
-    min-height: 8px;
-    border-radius: 50%;
-    background: var(--red);
-    animation: pulse 1.6s infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.35; }
-  }
-
   /* ===== Contenido central ===== */
   .content {
     position: relative;
@@ -196,7 +114,7 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 9vh 4vw 7vh 4vw;
+    padding: 0 4vw 7vh 4vw;
   }
 
   .eyebrow {
@@ -360,7 +278,7 @@
 
   .version-tag {
     position: fixed;
-    top: 1.4vh;
+    bottom: calc(6.5vh + 1vh);
     right: 1.6vw;
     z-index: 7;
     font-size: 0.7vw;
@@ -371,15 +289,12 @@
   }
 
   @media (max-width: 900px) {
-    .content { width: 100%; padding: 12vh 6vw 12vh; }
+    .content { width: 100%; padding: 6vh 6vw 12vh; }
     .photo-panel { width: 100%; opacity: 0.18; }
     .title { font-size: 8vw; }
     .subtitle { font-size: 3vw; max-width: 100%; }
     .unit .value { font-size: 13vw; }
     .unit .label { font-size: 2.2vw; }
-    .brand-text { font-size: 3vw; }
-    .brand-text small { font-size: 1.8vw; }
-    .live-pill { font-size: 2.2vw; }
     .zocalo-tag { font-size: 3vw; }
     .zocalo-ticker-track { font-size: 2.6vw; }
   }
@@ -390,14 +305,6 @@
   <div class="photo-panel">
     <div id="bgContainer"></div>
     <div class="photo-caption"><span>Papa León XIV</span>Rumbo a la Argentina</div>
-  </div>
-
-  <div class="topbar">
-    <div class="brand">
-      <div class="brand-mark">✝</div>
-      <div class="brand-text">Cuenta regresiva<small>Especial visita papal</small></div>
-    </div>
-    <div class="live-pill"><span class="live-dot"></span>En cuenta regresiva</div>
   </div>
 
   <div class="content">
@@ -434,7 +341,7 @@
     </div>
   </div>
 
-  <div class="version-tag">countdown-papa · v2.2</div>
+  <div class="version-tag">countdown-papa · v2.3</div>
 
   <script>
     // ==== CONFIGURACIÓN ====
