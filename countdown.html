@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.18 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.19 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -26,6 +26,9 @@
   TRIVIA_INTERVAL_MS, en el bloque CONFIGURACIÓN del script.
   Debajo de la caja de trivia hay un call to action fijo: "Más noticias
   en canal26.com", con la URL en rojo (.cta-link).
+  El logo del canal (canal26-logo-.png, en la raíz del repo) va arriba a
+  la derecha como bug de transmisión. Si el archivo todavía no está
+  subido, la imagen se auto-oculta (onerror) en vez de romper la página.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -366,6 +369,20 @@
     to { transform: translateX(-50%); }
   }
 
+  /* ===== Logo del canal, arriba a la derecha (bug de transmisión) =====
+     Se oculta solo si canal26-logo-.png todavía no está en el repo, así
+     nunca se ve un ícono de imagen rota en la transmisión. */
+  .channel-logo {
+    position: fixed;
+    top: 1.6vh;
+    right: 1.6vw;
+    z-index: 8;
+    height: 3.4vh;
+    width: auto;
+    opacity: 0.92;
+    filter: drop-shadow(0 2px 8px rgba(20,20,26,0.25));
+  }
+
   /* ===== Controles de música arriba a la izquierda: botón de
      silenciar (siempre visible) + chip "now playing" ===== */
   .music-controls {
@@ -493,6 +510,8 @@
 
     <div class="cta-line">Más noticias en <a class="cta-link" href="https://www.canal26.com" target="_blank" rel="noopener">canal26.com</a></div>
   </div>
+
+  <img class="channel-logo" id="channelLogo" src="canal26-logo-.png" alt="Canal 26" onerror="this.remove()">
 
   <div class="zocalo">
     <div class="zocalo-tag">Última hora</div>
