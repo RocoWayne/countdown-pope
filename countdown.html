@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.12 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.13 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -12,8 +12,10 @@
   .photo-caption en el CSS, y loadNewsTicker en el JS) para reactivarlos.
   La música de fondo se lee de /music/manifest.json (mismo mecanismo que
   las imágenes) y se reproduce siempre en orden aleatorio, sin repetir
-  un tema hasta que suenen todos los demás. Ver music/README.md. El chip
-  "now playing" está anclado arriba a la izquierda.
+  un tema hasta que suenen todos los demás. Ver music/README.md. Arriba
+  a la izquierda hay un botón redondo de silenciar/activar música
+  (siempre visible, persiste el mute mientras cambian los temas), y al
+  lado el chip "now playing".
   Debajo de "Llegada estimada" hay una caja de trivia grande y destacada
   (pensada para leerse en la transmisión de YouTube) que rota un dato a
   la vez, sin repetir hasta agotar la lista, leyendo trivia.json (array
@@ -368,11 +370,44 @@
 
   .audio-unlock.visible { display: flex; }
 
-  .now-playing {
+  /* ===== Controles de música arriba a la izquierda: botón de
+     silenciar (siempre visible) + chip "now playing" ===== */
+  .music-controls {
     position: fixed;
     top: 1.6vh;
     left: 1.6vw;
-    z-index: 7;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    gap: 0.6vw;
+  }
+
+  .mute-toggle {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4vw;
+    height: 2.4vw;
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--hair);
+    background: rgba(255,255,255,0.92);
+    color: var(--ink);
+    font-size: 1.1vw;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(20,20,26,0.1);
+  }
+
+  .mute-toggle.muted {
+    background: var(--red);
+    border-color: var(--red);
+    color: #fff;
+  }
+
+  .now-playing {
     display: none;
     align-items: center;
     gap: 0.5vw;
@@ -384,7 +419,7 @@
     font-weight: 500;
     font-size: 0.75vw;
     color: var(--ink-dim);
-    max-width: 22vw;
+    max-width: 20vw;
   }
 
   .now-playing.visible { display: flex; }
@@ -415,7 +450,8 @@
     .zocalo-tag { font-size: 3vw; }
     .zocalo-ticker-track { font-size: 2.6vw; }
     .audio-unlock { font-size: 2.4vw; }
-    .now-playing { font-size: 2.2vw; max-width: 60vw; }
+    .mute-toggle { width: 8vw; height: 8vw; font-size: 3.4vw; }
+    .now-playing { font-size: 2.2vw; max-width: 50vw; }
     .trivia-label { font-size: 2.6vw; }
     .trivia-text { font-size: 3.4vw; }
   }
@@ -468,7 +504,10 @@
   </div>
 
   <button class="audio-unlock" id="audioUnlock" type="button">🔊 Activar música</button>
-  <div class="now-playing" id="nowPlaying"><span class="dot"></span><span class="track-name" id="trackName"></span></div>
+  <div class="music-controls">
+    <button class="mute-toggle" id="muteToggle" type="button" aria-label="Silenciar música" title="Silenciar música">🔊</button>
+    <div class="now-playing" id="nowPlaying"><span class="dot"></span><span class="track-name" id="trackName"></span></div>
+  </div>
   <audio id="player" preload="auto"></audio>
 
   <script>
@@ -642,8 +681,24 @@
 
     const player = document.getElementById("player");
     const audioUnlockBtn = document.getElementById("audioUnlock");
+    const muteToggleBtn = document.getElementById("muteToggle");
     const nowPlayingEl = document.getElementById("nowPlaying");
     const trackNameEl = document.getElementById("trackName");
+
+    function updateMuteIcon() {
+      muteToggleBtn.textContent = player.muted ? "🔇" : "🔊";
+      muteToggleBtn.classList.toggle("muted", player.muted);
+      muteToggleBtn.title = player.muted ? "Activar música" : "Silenciar música";
+      muteToggleBtn.setAttribute("aria-label", muteToggleBtn.title);
+    }
+
+    muteToggleBtn.addEventListener("click", () => {
+      player.muted = !player.muted;
+      updateMuteIcon();
+      if (!player.muted) player.play().catch(() => {});
+    });
+
+    updateMuteIcon();
 
     let playlist = [];
     let playOrder = [];
@@ -714,6 +769,7 @@
     audioUnlockBtn.addEventListener("click", () => {
       audioUnlockBtn.classList.remove("visible");
       player.muted = false;
+      updateMuteIcon();
       player.play().catch(() => {});
     });
 
