@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.15 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.16 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -24,6 +24,8 @@
   plano de strings, máx. 240 caracteres cada uno) — se edita directo,
   sin Action. La duración de cada dato en pantalla se configura en
   TRIVIA_INTERVAL_MS, en el bloque CONFIGURACIÓN del script.
+  Debajo de la caja de trivia hay un call to action fijo: "Más noticias
+  en canal26.com", con la URL en rojo (.cta-link).
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -283,6 +285,20 @@
     opacity: 0;
   }
 
+  .cta-line {
+    margin-top: 1.6vh;
+    font-size: 1vw;
+    font-weight: 500;
+    color: var(--ink-dim);
+    letter-spacing: 0.01em;
+  }
+
+  .cta-link {
+    color: var(--red);
+    font-weight: 700;
+    text-decoration: none;
+  }
+
   .arrived {
     font-family: 'Barlow Condensed', sans-serif;
     text-transform: uppercase;
@@ -431,6 +447,7 @@
     .now-playing { font-size: 2.2vw; max-width: 50vw; }
     .trivia-label { font-size: 2.6vw; }
     .trivia-text { font-size: 3.4vw; }
+    .cta-line { font-size: 2.6vw; }
   }
 </style>
 </head>
@@ -471,6 +488,8 @@
       <span class="trivia-label">¿Sabías que…?</span>
       <span class="trivia-text" id="triviaText"></span>
     </div>
+
+    <div class="cta-line">Más noticias en <a class="cta-link" href="https://www.canal26.com" target="_blank" rel="noopener">canal26.com</a></div>
   </div>
 
   <div class="zocalo">
