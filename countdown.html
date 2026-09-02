@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.1 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.2 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada, zócalo).
-  Las imágenes de fondo ahora se leen de la carpeta /images del repo en vez
-  de un host externo — ver images/README.md para la convención de nombres.
+  Las imágenes de fondo se leen de /images/manifest.json (regenerado
+  automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
+  /images se usa, sin convención de nombre. Ver images/README.md.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -433,7 +434,7 @@
     </div>
   </div>
 
-  <div class="version-tag">countdown-papa · v2.1</div>
+  <div class="version-tag">countdown-papa · v2.2</div>
 
   <script>
     // ==== CONFIGURACIÓN ====
@@ -442,13 +443,12 @@
     const TARGET_DATE = new Date("2026-11-08T12:00:00-03:00");
 
     // Imágenes de fondo: se leen directamente de la carpeta /images del
-    // repositorio. Ver images/README.md para la convención de nombres
-    // (pope-01.jpg, pope-02.png, ...). No hace falta tocar este archivo
-    // al agregar o sacar fotos: se detectan solas.
+    // repositorio, sin ninguna regla de nombre. Un GitHub Action
+    // (.github/workflows/update-image-manifest.yml) regenera
+    // images/manifest.json automáticamente cada vez que se sube o borra
+    // un .jpg/.jpeg/.png en /images. Esta página solo lee ese manifest.
     const IMAGE_FOLDER = "images/";
-    const IMAGE_BASENAME = "pope-";
-    const MAX_IMAGES_TO_TRY = 20;
-    const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp"];
+    const MANIFEST_URL = IMAGE_FOLDER + "manifest.json";
     const SLIDESHOW_INTERVAL_MS = 12000;
     // ========================
 
@@ -493,9 +493,9 @@
     tick();
     setInterval(tick, 1000);
 
-    // Slideshow de fondo: detecta qué imágenes existen realmente en /images
-    // probando pope-01..pope-20 con cada extensión soportada. Solo se
-    // agregan las que cargan, así nunca se ve un ícono de imagen rota en OBS.
+    // Slideshow de fondo: lee la lista de archivos desde manifest.json
+    // (generado automáticamente) y solo agrega las imágenes que
+    // efectivamente cargan, así nunca se ve un ícono de imagen rota en OBS.
     const bgContainer = document.getElementById("bgContainer");
     let currentBg = 0;
 
@@ -508,13 +508,18 @@
       });
     }
 
-    async function findImageForIndex(index) {
-      const name = IMAGE_BASENAME + String(index).padStart(2, "0");
-      for (const ext of IMAGE_EXTENSIONS) {
-        const url = await probeImage(IMAGE_FOLDER + name + "." + ext);
-        if (url) return url;
+    async function loadManifest() {
+      try {
+        const res = await fetch(MANIFEST_URL, { cache: "no-store" });
+        if (!res.ok) return [];
+        const files = await res.json();
+        if (!Array.isArray(files)) return [];
+        return files.map((name) => IMAGE_FOLDER + name);
+      } catch (err) {
+        // Sin servidor (ej. abierto como archivo local) fetch() puede fallar
+        // por CORS; el panel simplemente queda liso, sin romper la página.
+        return [];
       }
-      return null;
     }
 
     function startSlideshow(urls) {
@@ -537,10 +542,11 @@
     }
 
     (async function loadBackgroundImages() {
+      const candidates = await loadManifest();
       const found = [];
-      for (let i = 1; i <= MAX_IMAGES_TO_TRY; i++) {
-        const url = await findImageForIndex(i);
-        if (url) found.push(url);
+      for (const url of candidates) {
+        const ok = await probeImage(url);
+        if (ok) found.push(ok);
       }
       startSlideshow(found);
     })();

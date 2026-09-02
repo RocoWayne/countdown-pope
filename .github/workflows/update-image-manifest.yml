@@ -1,0 +1,50 @@
+name: Update images manifest
+
+# Regenera images/manifest.json con la lista de .jpg/.jpeg/.png que haya
+# en /images, cada vez que se sube o borra una imagen ahí. No requiere
+# ningún nombre de archivo específico.
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "images/**.jpg"
+      - "images/**.jpeg"
+      - "images/**.png"
+
+permissions:
+  contents: write
+
+jobs:
+  update-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate images/manifest.json
+        run: |
+          cd images
+          {
+            echo "["
+            first=1
+            for f in *.jpg *.jpeg *.png *.JPG *.JPEG *.PNG; do
+              [ -e "$f" ] || continue
+              [ "$first" = 1 ] && first=0 || echo ","
+              printf '  "%s"' "$f"
+            done
+            echo ""
+            echo "]"
+          } > manifest.json
+          cat manifest.json
+
+      - name: Commit manifest if changed
+        run: |
+          if ! git diff --quiet -- images/manifest.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add images/manifest.json
+            git commit -m "Update images/manifest.json [skip ci]"
+            git push
+          else
+            echo "manifest.json unchanged"
+          fi
