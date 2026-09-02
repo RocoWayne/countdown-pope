@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.5 (2026-09-02) — estética adaptada al look and feel de Canal 26
-  (fondo blanco, rojo de noticiero, negro, tipografía condensada, zócalo).
+  VERSION: v2.6 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
   /images se usa, sin convención de nombre. Ver images/README.md.
-  El zócalo muestra las últimas noticias del tag Papa León XIV de
-  canal26.com, leídas de news.json (regenerado cada 20 min por
-  .github/workflows/update-news.yml). Ver scripts/fetch_news.py.
+  El zócalo de noticias (news.json, scripts/fetch_news.py) está oculto
+  por ahora a pedido — el código queda intacto, ver comentarios en el
+  CSS (.zocalo) y en el JS (loadNewsTicker) para reactivarlo.
   La música de fondo se lee de /music/manifest.json (mismo mecanismo que
   las imágenes) y se reproduce en playlist, una canción tras otra, en
   loop. Ver music/README.md.
@@ -227,14 +227,17 @@
     color: var(--red);
   }
 
-  /* ===== Zócalo inferior estilo noticiero ===== */
+  /* ===== Zócalo inferior estilo noticiero =====
+     Oculto por ahora (no se usa todavía). Para reactivarlo, cambiar
+     "display: none" de vuelta a "display: flex" acá abajo — el HTML y
+     el JS del ticker se dejaron intactos, no hace falta tocar nada más. */
   .zocalo {
     position: fixed;
     left: 0; bottom: 0;
     width: 100%;
     height: 6.5vh;
     background: var(--ink);
-    display: flex;
+    display: none;
     align-items: stretch;
     z-index: 6;
   }
@@ -409,7 +412,7 @@
     </div>
   </div>
 
-  <div class="version-tag">countdown-papa · v2.5</div>
+  <div class="version-tag">countdown-papa · v2.6</div>
 
   <button class="audio-unlock" id="audioUnlock" type="button">🔊 Activar música</button>
   <div class="now-playing" id="nowPlaying"><span class="dot"></span><span class="track-name" id="trackName"></span></div>
@@ -480,8 +483,11 @@
       renderTicker(FALLBACK_TICKER_TEXT);
     }
 
-    loadNewsTicker();
-    setInterval(loadNewsTicker, NEWS_REFRESH_MS);
+    // Zócalo oculto por ahora (ver .zocalo en el CSS) — se deja de pedir
+    // news.json en loop para no gastar red de más. Para reactivar el
+    // ticker, además de mostrar el CSS, descomentar estas dos líneas:
+    // loadNewsTicker();
+    // setInterval(loadNewsTicker, NEWS_REFRESH_MS);
 
     function pad(n) { return String(n).padStart(2, "0"); }
 
