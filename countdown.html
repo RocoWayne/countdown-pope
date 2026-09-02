@@ -1,15 +1,17 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.22 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.23 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
   /images se usa, sin convención de nombre. Ver images/README.md.
-  El zócalo de noticias (news.json, scripts/fetch_news.py) y el texto
-  "Papa León XIV / Rumbo a la Argentina" sobre la foto están ocultos
-  por ahora a pedido — el código queda intacto (ver .zocalo y
-  .photo-caption en el CSS, y loadNewsTicker en el JS) para reactivarlos.
+  El zócalo de noticias y su scraper se descartaron por completo (no se
+  van a usar): no queda scripts/, ni .github/workflows/update-news.yml,
+  ni news.json, ni el HTML/CSS/JS del ticker inferior.
+  El texto "Papa León XIV / Rumbo a la Argentina" sobre la foto sigue
+  oculto por ahora a pedido — ese sí queda intacto en el CSS
+  (.photo-caption) para reactivarlo cuando se necesite.
   La música de fondo se lee de /music/manifest.json (mismo mecanismo que
   las imágenes) y se reproduce siempre en orden aleatorio, sin repetir
   un tema hasta que suenen todos los demás. Ver music/README.md. Arriba
@@ -330,63 +332,6 @@
     color: var(--red);
   }
 
-  /* ===== Zócalo inferior estilo noticiero =====
-     Oculto por ahora (no se usa todavía). Para reactivarlo, cambiar
-     "display: none" de vuelta a "display: flex" acá abajo — el HTML y
-     el JS del ticker se dejaron intactos, no hace falta tocar nada más. */
-  .zocalo {
-    position: fixed;
-    left: 0; bottom: 0;
-    width: 100%;
-    height: 6.5vh;
-    background: var(--ink);
-    display: none;
-    align-items: stretch;
-    z-index: 6;
-  }
-
-  .zocalo-tag {
-    background: var(--red);
-    color: #fff;
-    font-family: 'Barlow Condensed', sans-serif;
-    font-weight: 700;
-    text-transform: uppercase;
-    font-size: 1.15vw;
-    letter-spacing: 0.05em;
-    display: flex;
-    align-items: center;
-    padding: 0 1.8vw;
-    white-space: nowrap;
-  }
-
-  .zocalo-ticker {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .zocalo-ticker-track {
-    display: inline-flex;
-    white-space: nowrap;
-    animation: scroll-left 26s linear infinite;
-    color: #f4f4f5;
-    font-family: 'Inter', sans-serif;
-    font-weight: 500;
-    font-size: 1.05vw;
-    letter-spacing: 0.01em;
-  }
-
-  .zocalo-ticker-track span {
-    padding-right: 5vw;
-  }
-
-  @keyframes scroll-left {
-    from { transform: translateX(0); }
-    to { transform: translateX(-50%); }
-  }
-
   /* ===== Logo del canal, arriba a la derecha (bug de transmisión) =====
      Se oculta solo si canal26-logo.png todavía no está en el repo, así
      nunca se ve un ícono de imagen rota en la transmisión. */
@@ -478,8 +423,6 @@
     .subtitle { font-size: 3vw; max-width: 100%; }
     .unit .value { font-size: 13vw; }
     .unit .label { font-size: 2.2vw; }
-    .zocalo-tag { font-size: 3vw; }
-    .zocalo-ticker-track { font-size: 2.6vw; }
     .mute-toggle { width: 8vw; height: 8vw; font-size: 3.4vw; }
     .now-playing { font-size: 2.2vw; max-width: 50vw; }
     .trivia-label { font-size: 2.6vw; }
@@ -533,13 +476,6 @@
 
   <img class="channel-logo" id="channelLogo" src="canal26-logo.png" alt="Canal 26" onerror="this.remove()">
 
-  <div class="zocalo">
-    <div class="zocalo-tag">Última hora</div>
-    <div class="zocalo-ticker">
-      <div class="zocalo-ticker-track" id="tickerTrack"></div>
-    </div>
-  </div>
-
   <div class="music-controls">
     <button class="mute-toggle" id="muteToggle" type="button" aria-label="Silenciar música" title="Silenciar música">🔊</button>
     <div class="now-playing" id="nowPlaying"><span class="dot"></span><span class="track-name" id="trackName"></span></div>
@@ -574,52 +510,6 @@
     const targetDateText = dateFormatter.format(TARGET_DATE) + " hs (ARG)";
     document.getElementById("targetDateLabel").innerHTML =
       "Llegada estimada: <strong>" + targetDateText + "</strong>";
-
-    // Zócalo: se arma con las últimas noticias de news.json (regenerado por
-    // .github/workflows/update-news.yml a partir del tag de canal26.com).
-    // Si no hay noticias (todavía no corrió el Action, o falló el fetch),
-    // cae a un texto fijo para que el zócalo nunca quede vacío.
-    const NEWS_URL = "news.json";
-    const NEWS_REFRESH_MS = 5 * 60 * 1000;
-    const FALLBACK_TICKER_TEXT =
-      "VISITA PAPAL A LA ARGENTINA · Llegada estimada: " + targetDateText +
-      " · Primera visita de un Papa al país desde 1987 · Seguí la cobertura en vivo";
-
-    function renderTicker(text) {
-      const track = document.getElementById("tickerTrack");
-      track.textContent = "";
-      // Se repite dos veces para que la animación de scroll-left sea continua.
-      [text, text].forEach((t) => {
-        const span = document.createElement("span");
-        span.textContent = t;
-        track.appendChild(span);
-      });
-    }
-
-    async function loadNewsTicker() {
-      try {
-        const res = await fetch(NEWS_URL, { cache: "no-store" });
-        if (!res.ok) throw new Error("news.json no disponible");
-        const items = await res.json();
-        const titles = Array.isArray(items)
-          ? items.map((it) => (it && it.title ? String(it.title).trim() : "")).filter(Boolean)
-          : [];
-        if (titles.length > 0) {
-          renderTicker(titles.slice(0, 10).join("     ·     "));
-          return;
-        }
-      } catch (err) {
-        // Sin conexión, sin Action corrido todavía, o abierto como archivo
-        // local: se usa el texto fijo de abajo.
-      }
-      renderTicker(FALLBACK_TICKER_TEXT);
-    }
-
-    // Zócalo oculto por ahora (ver .zocalo en el CSS) — se deja de pedir
-    // news.json en loop para no gastar red de más. Para reactivar el
-    // ticker, además de mostrar el CSS, descomentar estas dos líneas:
-    // loadNewsTicker();
-    // setInterval(loadNewsTicker, NEWS_REFRESH_MS);
 
     function pad(n) { return String(n).padStart(2, "0"); }
 
