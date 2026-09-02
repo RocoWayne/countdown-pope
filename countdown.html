@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.6 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.7 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
+  Se sacó el texto "countdown-papa · vX.X" que quedaba visible en
+  pantalla (era solo referencia de desarrollo) — la versión ahora vive
+  únicamente acá, en este comentario.
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
   /images se usa, sin convención de nombre. Ver images/README.md.
@@ -284,18 +287,6 @@
     to { transform: translateX(-50%); }
   }
 
-  .version-tag {
-    position: fixed;
-    bottom: calc(6.5vh + 1vh);
-    right: 1.6vw;
-    z-index: 7;
-    font-size: 0.7vw;
-    font-weight: 500;
-    color: rgba(20,20,26,0.3);
-    font-family: 'Inter', sans-serif;
-    letter-spacing: 0.06em;
-  }
-
   /* ===== Botón de activar audio (solo aparece si el navegador bloquea
      el autoplay con sonido) ===== */
   .audio-unlock {
@@ -411,8 +402,6 @@
       <div class="zocalo-ticker-track" id="tickerTrack"></div>
     </div>
   </div>
-
-  <div class="version-tag">countdown-papa · v2.6</div>
 
   <button class="audio-unlock" id="audioUnlock" type="button">🔊 Activar música</button>
   <div class="now-playing" id="nowPlaying"><span class="dot"></span><span class="track-name" id="trackName"></span></div>
