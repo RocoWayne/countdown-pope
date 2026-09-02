@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.20 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.21 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -29,6 +29,8 @@
   El logo del canal (canal26-logo.png, en la raíz del repo) va arriba a
   la derecha como bug de transmisión. Si el archivo todavía no está
   subido, la imagen se auto-oculta (onerror) en vez de romper la página.
+  En la esquina inferior derecha del carrusel de fotos (donde antes
+  estaba el tag de versión) figura el crédito "© Reuters".
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -128,6 +130,20 @@
     text-transform: uppercase;
     color: #f2c9c6;
     margin-bottom: 0.4vh;
+  }
+
+  /* Crédito de las fotos del carrusel de fondo. */
+  .photo-credit {
+    position: absolute;
+    right: 1.2vw;
+    bottom: 1.4vh;
+    z-index: 4;
+    color: rgba(255,255,255,0.85);
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 0.75vw;
+    letter-spacing: 0.03em;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.85);
   }
 
   /* ===== Contenido central ===== */
@@ -467,6 +483,7 @@
     .trivia-label { font-size: 2.6vw; }
     .trivia-text { font-size: 3.4vw; }
     .cta-line { font-size: 3.4vw; }
+    .photo-credit { font-size: 2.4vw; }
   }
 </style>
 </head>
@@ -475,6 +492,7 @@
   <div class="photo-panel">
     <div id="bgContainer"></div>
     <div class="photo-caption"><span>Papa León XIV</span>Rumbo a la Argentina</div>
+    <div class="photo-credit">© Reuters</div>
   </div>
 
   <div class="content">
