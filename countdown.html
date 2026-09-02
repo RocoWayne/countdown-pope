@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.1 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada, zócalo).
+  Las imágenes de fondo ahora se leen de la carpeta /images del repo en vez
+  de un host externo — ver images/README.md para la convención de nombres.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -431,7 +433,7 @@
     </div>
   </div>
 
-  <div class="version-tag">countdown-papa · v2</div>
+  <div class="version-tag">countdown-papa · v2.1</div>
 
   <script>
     // ==== CONFIGURACIÓN ====
@@ -439,13 +441,14 @@
     // Editar acá cuando se confirme el horario exacto de la visita.
     const TARGET_DATE = new Date("2026-11-08T12:00:00-03:00");
 
-    // Imágenes de fondo (Wikimedia Commons, licencia CC BY-SA 4.0,
-    // uso libre con atribución: https://commons.wikimedia.org/wiki/Category:Pope_Leo_XIV)
-    const BG_IMAGES = [
-      "https://commons.wikimedia.org/wiki/Special:FilePath/Pope_Leo_XIV_on_the_loggia.jpg",
-      "https://commons.wikimedia.org/wiki/Special:FilePath/Pope_Leo_XIV_2.jpg",
-      "https://commons.wikimedia.org/wiki/Special:FilePath/Leo_XIV_(13_October_2025).jpg"
-    ];
+    // Imágenes de fondo: se leen directamente de la carpeta /images del
+    // repositorio. Ver images/README.md para la convención de nombres
+    // (pope-01.jpg, pope-02.png, ...). No hace falta tocar este archivo
+    // al agregar o sacar fotos: se detectan solas.
+    const IMAGE_FOLDER = "images/";
+    const IMAGE_BASENAME = "pope-";
+    const MAX_IMAGES_TO_TRY = 20;
+    const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp"];
     const SLIDESHOW_INTERVAL_MS = 12000;
     // ========================
 
@@ -490,14 +493,38 @@
     tick();
     setInterval(tick, 1000);
 
-    // Slideshow de fondo (solo se agregan las imágenes que efectivamente cargan,
-    // así nunca se ve un ícono de imagen rota en OBS)
+    // Slideshow de fondo: detecta qué imágenes existen realmente en /images
+    // probando pope-01..pope-20 con cada extensión soportada. Solo se
+    // agregan las que cargan, así nunca se ve un ícono de imagen rota en OBS.
     const bgContainer = document.getElementById("bgContainer");
     let currentBg = 0;
-    let layers = [];
 
-    function startSlideshow() {
-      layers = document.querySelectorAll(".bg-layer");
+    function probeImage(url) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(url);
+        img.onerror = () => resolve(null);
+        img.src = url;
+      });
+    }
+
+    async function findImageForIndex(index) {
+      const name = IMAGE_BASENAME + String(index).padStart(2, "0");
+      for (const ext of IMAGE_EXTENSIONS) {
+        const url = await probeImage(IMAGE_FOLDER + name + "." + ext);
+        if (url) return url;
+      }
+      return null;
+    }
+
+    function startSlideshow(urls) {
+      urls.forEach((url) => {
+        const layer = document.createElement("div");
+        layer.className = "bg-layer";
+        layer.style.backgroundImage = "url('" + url + "')";
+        bgContainer.appendChild(layer);
+      });
+      const layers = document.querySelectorAll(".bg-layer");
       if (layers.length === 0) return;
       layers[0].classList.add("active");
       if (layers.length > 1) {
@@ -509,23 +536,14 @@
       }
     }
 
-    let pending = BG_IMAGES.length;
-    BG_IMAGES.forEach((url) => {
-      const probe = new Image();
-      probe.onload = () => {
-        const layer = document.createElement("div");
-        layer.className = "bg-layer";
-        layer.style.backgroundImage = "url('" + url + "')";
-        bgContainer.appendChild(layer);
-        pending--;
-        if (pending === 0) startSlideshow();
-      };
-      probe.onerror = () => {
-        pending--;
-        if (pending === 0) startSlideshow();
-      };
-      probe.src = url;
-    });
+    (async function loadBackgroundImages() {
+      const found = [];
+      for (let i = 1; i <= MAX_IMAGES_TO_TRY; i++) {
+        const url = await findImageForIndex(i);
+        if (url) found.push(url);
+      }
+      startSlideshow(found);
+    })();
   </script>
 </body>
 </html>
