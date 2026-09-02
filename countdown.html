@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.28 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.29 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -66,6 +66,9 @@
   último que había en memoria; y los errores de red/audio/imagen quedan
   logueados en la consola del navegador (prefijo "[countdown]") para
   poder diagnosticar a distancia si algo falla en una transmisión larga.
+  En modo llegada también se oculta la barra roja fina del panel lateral
+  (era un detalle del panel angosto, no de la pantalla completa) y las
+  fotos pasan a centrarse enteras en vez de forzar la parte superior.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -127,6 +130,20 @@
 
   body.papal-arrival-mode .photo-panel::before {
     background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.6) 100%);
+  }
+
+  /* La barra roja fina era un detalle del panel lateral angosto; en
+     pantalla completa no aporta y queda como una línea suelta pegada
+     al borde izquierdo. */
+  body.papal-arrival-mode .photo-panel::after {
+    display: none;
+  }
+
+  /* El encuadre "center 20%" está pensado para el panel angosto (42vw,
+     más alto que ancho); en pantalla completa (16:9 entero) conviene
+     centrar la imagen entera en vez de forzar la parte superior. */
+  body.papal-arrival-mode .bg-layer {
+    background-position: center center;
   }
 
   body.papal-arrival-mode .content,
