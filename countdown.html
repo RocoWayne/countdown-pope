@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.3 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.4 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada, zócalo).
-  Se sacó el header/topbar superior: no era necesario.
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
   /images se usa, sin convención de nombre. Ver images/README.md.
+  El zócalo ahora muestra las últimas noticias del tag Papa León XIV de
+  canal26.com, leídas de news.json (regenerado cada 20 min por
+  .github/workflows/update-news.yml). Ver scripts/fetch_news.py.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -341,7 +343,7 @@
     </div>
   </div>
 
-  <div class="version-tag">countdown-papa · v2.3</div>
+  <div class="version-tag">countdown-papa · v2.4</div>
 
   <script>
     // ==== CONFIGURACIÓN ====
@@ -368,11 +370,48 @@
     document.getElementById("targetDateLabel").innerHTML =
       "Llegada estimada: <strong>" + targetDateText + "</strong>";
 
-    const tickerText =
+    // Zócalo: se arma con las últimas noticias de news.json (regenerado por
+    // .github/workflows/update-news.yml a partir del tag de canal26.com).
+    // Si no hay noticias (todavía no corrió el Action, o falló el fetch),
+    // cae a un texto fijo para que el zócalo nunca quede vacío.
+    const NEWS_URL = "news.json";
+    const NEWS_REFRESH_MS = 5 * 60 * 1000;
+    const FALLBACK_TICKER_TEXT =
       "VISITA PAPAL A LA ARGENTINA · Llegada estimada: " + targetDateText +
       " · Primera visita de un Papa al país desde 1987 · Seguí la cobertura en vivo";
-    document.getElementById("tickerTrack").innerHTML =
-      "<span>" + tickerText + "</span><span>" + tickerText + "</span>";
+
+    function renderTicker(text) {
+      const track = document.getElementById("tickerTrack");
+      track.textContent = "";
+      // Se repite dos veces para que la animación de scroll-left sea continua.
+      [text, text].forEach((t) => {
+        const span = document.createElement("span");
+        span.textContent = t;
+        track.appendChild(span);
+      });
+    }
+
+    async function loadNewsTicker() {
+      try {
+        const res = await fetch(NEWS_URL, { cache: "no-store" });
+        if (!res.ok) throw new Error("news.json no disponible");
+        const items = await res.json();
+        const titles = Array.isArray(items)
+          ? items.map((it) => (it && it.title ? String(it.title).trim() : "")).filter(Boolean)
+          : [];
+        if (titles.length > 0) {
+          renderTicker(titles.slice(0, 10).join("     ·     "));
+          return;
+        }
+      } catch (err) {
+        // Sin conexión, sin Action corrido todavía, o abierto como archivo
+        // local: se usa el texto fijo de abajo.
+      }
+      renderTicker(FALLBACK_TICKER_TEXT);
+    }
+
+    loadNewsTicker();
+    setInterval(loadNewsTicker, NEWS_REFRESH_MS);
 
     function pad(n) { return String(n).padStart(2, "0"); }
 

@@ -1,0 +1,46 @@
+name: Update news ticker
+
+# Scrapea las últimas noticias del tag Papa León XIV en canal26.com y
+# regenera news.json, que el zócalo de countdown.html usa como ticker.
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch: {}
+  push:
+    branches: ["**"]
+    paths:
+      - "scripts/fetch_news.py"
+      - "scripts/requirements.txt"
+      - ".github/workflows/update-news.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  update-news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Fetch latest news
+        run: python scripts/fetch_news.py
+
+      - name: Commit news.json if changed
+        run: |
+          if ! git diff --quiet -- news.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add news.json
+            git commit -m "Update news.json [skip ci]"
+            git push
+          else
+            echo "news.json unchanged"
+          fi
