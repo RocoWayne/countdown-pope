@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.11 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.12 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -14,10 +14,12 @@
   las imágenes) y se reproduce siempre en orden aleatorio, sin repetir
   un tema hasta que suenen todos los demás. Ver music/README.md. El chip
   "now playing" está anclado arriba a la izquierda.
-  Debajo de "Llegada estimada" hay una caja de trivia que rota un dato
-  a la vez (fade cada 15s, sin repetir hasta agotar la lista), leyendo
-  trivia.json (array plano de strings, máx. 240 caracteres cada uno) —
-  se edita directo, sin Action.
+  Debajo de "Llegada estimada" hay una caja de trivia grande y destacada
+  (pensada para leerse en la transmisión de YouTube) que rota un dato a
+  la vez, sin repetir hasta agotar la lista, leyendo trivia.json (array
+  plano de strings, máx. 240 caracteres cada uno) — se edita directo,
+  sin Action. La duración de cada dato en pantalla se configura en
+  TRIVIA_INTERVAL_MS, en el bloque CONFIGURACIÓN del script.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -228,39 +230,47 @@
     color: var(--ink);
   }
 
-  /* ===== Caja de trivia: un dato a la vez, rotando con fade ===== */
+  /* ===== Caja de trivia: un dato a la vez, rotando con fade =====
+     Grande y destacada a propósito: el HTML se transmite en vivo por
+     YouTube y el texto tiene que leerse bien en pantalla. */
   .trivia-box {
     display: none;
-    align-items: flex-start;
-    gap: 0.8vw;
-    margin-top: 2.4vh;
-    padding: 1.3vh 1.2vw;
-    max-width: 34vw;
+    flex-direction: column;
+    gap: 0.9vh;
+    margin-top: 2.8vh;
+    padding: 2vh 1.8vw;
+    width: 100%;
     background: var(--paper);
     border: 1px solid var(--hair);
-    border-left: 4px solid var(--red);
-    border-radius: 4px;
-    box-shadow: 0 6px 18px rgba(20,20,26,0.06);
+    border-left: 8px solid var(--red);
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(20,20,26,0.1);
   }
 
   .trivia-box.visible { display: flex; }
 
   .trivia-label {
     flex: none;
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    padding: 0.35vh 0.7vw;
+    background: var(--red);
+    border-radius: 4px;
     font-family: 'Barlow Condensed', sans-serif;
     font-weight: 700;
     text-transform: uppercase;
-    font-size: 0.85vw;
-    letter-spacing: 0.08em;
-    color: var(--red);
-    padding-top: 0.1vh;
+    font-size: 0.95vw;
+    letter-spacing: 0.1em;
+    color: #fff;
   }
 
   .trivia-text {
-    font-size: 0.9vw;
-    line-height: 1.45;
+    font-size: 1.55vw;
+    line-height: 1.4;
     color: var(--ink);
-    font-weight: 400;
+    font-weight: 500;
+    text-wrap: balance;
     opacity: 1;
     transition: opacity 0.5s ease;
   }
@@ -406,9 +416,8 @@
     .zocalo-ticker-track { font-size: 2.6vw; }
     .audio-unlock { font-size: 2.4vw; }
     .now-playing { font-size: 2.2vw; max-width: 60vw; }
-    .trivia-box { max-width: 100%; }
-    .trivia-label { font-size: 2.4vw; }
-    .trivia-text { font-size: 2.6vw; }
+    .trivia-label { font-size: 2.6vw; }
+    .trivia-text { font-size: 3.4vw; }
   }
 </style>
 </head>
@@ -467,6 +476,10 @@
     // Fecha y hora objetivo (zona horaria Argentina, Buenos Aires, UTC-3 fijo).
     // Editar acá cuando se confirme el horario exacto de la visita.
     const TARGET_DATE = new Date("2026-11-08T12:00:00-03:00");
+
+    // Cada cuánto cambia el dato de la caja de trivia (en milisegundos).
+    // Ej: 45000 = 45 segundos. Se lee de trivia.json (ver abajo del todo).
+    const TRIVIA_INTERVAL_MS = 45000;
 
     // Imágenes de fondo: se leen directamente de la carpeta /images del
     // repositorio, sin ninguna regla de nombre. Un GitHub Action
@@ -722,10 +735,10 @@
 
     // ===== Caja de trivia: un dato a la vez, rotando sin repetir =====
     // Lee trivia.json (array plano de strings, hasta 240 caracteres cada
-    // uno) y muestra uno por vez con fade, cambiando cada TRIVIA_INTERVAL_MS.
-    // Editás trivia.json directamente y hacés push — no requiere Action.
+    // uno) y muestra uno por vez con fade, cambiando cada TRIVIA_INTERVAL_MS
+    // (configurado arriba, en CONFIGURACIÓN). Editás trivia.json
+    // directamente y hacés push — no requiere Action.
     const TRIVIA_URL = "trivia.json";
-    const TRIVIA_INTERVAL_MS = 15000;
     const TRIVIA_FADE_MS = 500;
 
     const triviaBox = document.getElementById("triviaBox");
