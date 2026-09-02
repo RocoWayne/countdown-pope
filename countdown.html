@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.23 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.24 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -33,6 +33,12 @@
   subido, la imagen se auto-oculta (onerror) en vez de romper la página.
   En la esquina inferior derecha del carrusel de fotos (donde antes
   estaba el tag de versión) figura el crédito "© Reuters".
+  Hay una caja emergente "Participá" que entra deslizándose desde el
+  borde derecho invitando a comentar en el chat: aparece a los 5s de
+  cargada la página, se queda 12s visible y vuelve cada 5 minutos, con
+  preguntas que se leen de cta.json (array plano de strings, se edita a
+  mano, sin Action), sin repetir la misma dos veces seguidas. Duraciones
+  configurables en CTA_FIRST_DELAY_MS / CTA_VISIBLE_MS / CTA_INTERVAL_MS.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -332,6 +338,63 @@
     color: var(--red);
   }
 
+  /* ===== Caja emergente de "comentá en el chat" =====
+     Entra deslizándose desde el borde derecho de la pantalla, se queda
+     un rato visible y vuelve a salir. Se dispara desde JS (clase
+     "show"), no depende de :hover ni de nada del usuario. */
+  .chat-popup {
+    position: fixed;
+    top: 50%;
+    right: 1.6vw;
+    z-index: 9;
+    width: 19vw;
+    min-width: 220px;
+    transform: translate(120%, -50%);
+    opacity: 0;
+    transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s ease;
+    background: var(--ink);
+    border-radius: 10px;
+    border-left: 6px solid var(--red);
+    box-shadow: 0 14px 34px rgba(0,0,0,0.35);
+    padding: 1.8vh 1.4vw;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7vw;
+  }
+
+  .chat-popup.show {
+    transform: translate(0, -50%);
+    opacity: 1;
+  }
+
+  .chat-popup .chat-icon {
+    flex: none;
+    font-size: 1.6vw;
+    line-height: 1;
+  }
+
+  .chat-popup .chat-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5vh;
+  }
+
+  .chat-popup .chat-tag {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.8vw;
+    letter-spacing: 0.12em;
+    color: var(--red);
+  }
+
+  .chat-popup .chat-text {
+    font-size: 1.05vw;
+    line-height: 1.35;
+    color: #fff;
+    font-weight: 500;
+  }
+
   /* ===== Logo del canal, arriba a la derecha (bug de transmisión) =====
      Se oculta solo si canal26-logo.png todavía no está en el repo, así
      nunca se ve un ícono de imagen rota en la transmisión. */
@@ -429,6 +492,10 @@
     .trivia-text { font-size: 3.4vw; }
     .cta-line { font-size: 3.4vw; }
     .photo-credit { font-size: 2.4vw; }
+    .chat-popup { width: 62vw; padding: 2.2vh 4vw; }
+    .chat-popup .chat-icon { font-size: 5vw; }
+    .chat-popup .chat-tag { font-size: 2.6vw; }
+    .chat-popup .chat-text { font-size: 3.2vw; }
   }
 </style>
 </head>
@@ -475,6 +542,14 @@
   </div>
 
   <img class="channel-logo" id="channelLogo" src="canal26-logo.png" alt="Canal 26" onerror="this.remove()">
+
+  <div class="chat-popup" id="chatPopup">
+    <span class="chat-icon">💬</span>
+    <span class="chat-copy">
+      <span class="chat-tag">Participá</span>
+      <span class="chat-text" id="chatPopupText"></span>
+    </span>
+  </div>
 
   <div class="music-controls">
     <button class="mute-toggle" id="muteToggle" type="button" aria-label="Silenciar música" title="Silenciar música">🔊</button>
@@ -771,6 +846,67 @@
         }
       } catch (err) {
         // Sin trivia.json o sin servidor (file://): la caja simplemente
+        // no se muestra.
+      }
+    })();
+
+    // ===== Caja emergente "Participá": invita a comentar en el chat =====
+    // Lee cta.json (array plano de strings, se edita a mano, sin Action).
+    // Aparece a los CTA_FIRST_DELAY_MS de cargada la página, se mantiene
+    // visible CTA_VISIBLE_MS y vuelve a aparecer cada CTA_INTERVAL_MS,
+    // siempre con una pregunta distinta a la anterior (mismo shuffle sin
+    // repetición que ya usan la música y la trivia).
+    const CTA_URL = "cta.json";
+    const CTA_FIRST_DELAY_MS = 5000;
+    const CTA_VISIBLE_MS = 12000;
+    const CTA_INTERVAL_MS = 5 * 60 * 1000;
+
+    const chatPopup = document.getElementById("chatPopup");
+    const chatPopupTextEl = document.getElementById("chatPopupText");
+
+    let ctaItems = [];
+    let ctaOrder = [];
+    let ctaOrderIndex = 0;
+
+    function buildCtaOrder(avoidFirst) {
+      const order = shuffle(ctaItems);
+      if (order.length > 1 && order[0] === avoidFirst) {
+        [order[0], order[1]] = [order[1], order[0]];
+      }
+      return order;
+    }
+
+    function showChatPopup() {
+      if (ctaItems.length === 0) return;
+      if (ctaOrderIndex >= ctaOrder.length) {
+        const lastShown = ctaOrder[ctaOrder.length - 1];
+        ctaOrder = buildCtaOrder(lastShown);
+        ctaOrderIndex = 0;
+      }
+      chatPopupTextEl.textContent = ctaOrder[ctaOrderIndex];
+      ctaOrderIndex++;
+      chatPopup.classList.add("show");
+      setTimeout(() => chatPopup.classList.remove("show"), CTA_VISIBLE_MS);
+    }
+
+    (async function loadCta() {
+      try {
+        const res = await fetch(CTA_URL, { cache: "no-store" });
+        if (!res.ok) return;
+        const items = await res.json();
+        if (!Array.isArray(items)) return;
+        ctaItems = items
+          .map((t) => (typeof t === "string" ? t.trim() : ""))
+          .filter((t) => t.length > 0 && t.length <= 240);
+        if (ctaItems.length === 0) return;
+        ctaOrder = buildCtaOrder(null);
+        ctaOrderIndex = 0;
+        setTimeout(() => {
+          showChatPopup();
+          setInterval(showChatPopup, CTA_INTERVAL_MS);
+        }, CTA_FIRST_DELAY_MS);
+      } catch (err) {
+        // Sin cta.json o sin servidor (file://): la caja simplemente
         // no se muestra.
       }
     })();
