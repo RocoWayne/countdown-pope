@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.25 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.26 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -45,6 +45,12 @@
   para que el contenido nuevo que se suba al repo mientras está en vivo
   se refleje solo, sin cortar la música en curso ni reiniciar el carrusel,
   la trivia o el popup de chat que ya estén activos.
+  Cuando el countdown llega a cero, tick() agrega la clase
+  "papal-arrival-mode" al body (una sola vez): el panel de fotos pasa a
+  ocupar toda la pantalla con un degradado oscuro atrás del mensaje
+  "¡EL PAPA LEÓN YA ESTÁ EN ARGENTINA! / Cobertura exclusiva en
+  canal26.com" (#arrivalMessage), se oculta el contenido normal
+  (countdown/trivia/CTA popup) y la música sigue sonando sin cortes.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -90,6 +96,74 @@
     height: 100%;
     overflow: hidden;
     background: var(--paper-dim);
+    transition: width 1.2s ease;
+  }
+
+  /* ===== Modo "el Papa ya llegó": pantalla full-bleed =====
+     Se activa agregando la clase "papal-arrival-mode" al <body> desde
+     tick() cuando el countdown llega a cero (ver JS). El panel de fotos
+     pasa a ocupar toda la pantalla, se oculta el contenido normal
+     (countdown/trivia/CTA popup) y aparece el mensaje grande encima. La
+     música sigue sonando sin cortes: el <audio> nunca se toca. */
+  body.papal-arrival-mode .photo-panel {
+    width: 100%;
+  }
+
+  body.papal-arrival-mode .photo-panel::before {
+    background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.6) 100%);
+  }
+
+  body.papal-arrival-mode .content,
+  body.papal-arrival-mode .chat-popup {
+    display: none !important;
+  }
+
+  .arrival-message {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 6;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 5vw;
+    opacity: 0;
+    transition: opacity 1.4s ease;
+  }
+
+  body.papal-arrival-mode .arrival-message {
+    display: flex;
+  }
+
+  body.papal-arrival-mode .arrival-message.show {
+    opacity: 1;
+  }
+
+  .arrival-title {
+    font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 4.6vw;
+    line-height: 1.05;
+    color: #fff;
+    text-shadow: 0 4px 26px rgba(0,0,0,0.7);
+    margin-bottom: 2.6vh;
+    text-wrap: balance;
+  }
+
+  .arrival-subtitle {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 1.5vw;
+    color: #fff;
+    text-shadow: 0 2px 14px rgba(0,0,0,0.7);
+  }
+
+  .arrival-subtitle span {
+    color: var(--red);
   }
 
   .bg-layer {
@@ -502,6 +576,8 @@
     .chat-popup .chat-icon { font-size: 5vw; }
     .chat-popup .chat-tag { font-size: 2.6vw; }
     .chat-popup .chat-text { font-size: 3.2vw; }
+    .arrival-title { font-size: 9vw; }
+    .arrival-subtitle { font-size: 3.4vw; }
   }
 </style>
 </head>
@@ -557,6 +633,11 @@
     </span>
   </div>
 
+  <div class="arrival-message" id="arrivalMessage">
+    <div class="arrival-title">¡EL PAPA LEÓN YA ESTÁ EN ARGENTINA!</div>
+    <div class="arrival-subtitle">Cobertura exclusiva en <span>canal26.com</span></div>
+  </div>
+
   <div class="music-controls">
     <button class="mute-toggle" id="muteToggle" type="button" aria-label="Silenciar música" title="Silenciar música">🔊</button>
     <div class="now-playing" id="nowPlaying"><span class="dot"></span><span class="track-name" id="trackName"></span></div>
@@ -594,6 +675,24 @@
 
     function pad(n) { return String(n).padStart(2, "0"); }
 
+    // Modo "el Papa ya llegó": pantalla full-bleed con las fotos atrás del
+    // mensaje grande. Se activa una sola vez (idempotente) cuando tick()
+    // detecta que el countdown llegó a cero. La música sigue sonando sin
+    // cortes porque el <audio> nunca se toca; trivia y CTA popup quedan
+    // ocultos por CSS (body.papal-arrival-mode) sin necesidad de frenar
+    // sus timers.
+    let arrivalModeActive = false;
+    const arrivalMessageEl = document.getElementById("arrivalMessage");
+
+    function activateArrivalMode() {
+      if (arrivalModeActive) return;
+      arrivalModeActive = true;
+      document.body.classList.add("papal-arrival-mode");
+      requestAnimationFrame(() => {
+        arrivalMessageEl.classList.add("show");
+      });
+    }
+
     function tick() {
       const now = new Date();
       let diff = TARGET_DATE.getTime() - now.getTime();
@@ -601,6 +700,7 @@
       if (diff <= 0) {
         document.getElementById("countdown").innerHTML =
           '<div class="arrived">¡El Papa está en Argentina! 🇦🇷</div>';
+        activateArrivalMode();
         return;
       }
 
