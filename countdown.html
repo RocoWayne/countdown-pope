@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.14 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.15 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -15,7 +15,9 @@
   un tema hasta que suenen todos los demás. Ver music/README.md. Arriba
   a la izquierda hay un botón redondo de silenciar/activar música
   (siempre visible, persiste el mute mientras cambian los temas), y al
-  lado el chip "now playing".
+  lado el chip "now playing". Se sacó el botón separado "Activar música"
+  que aparecía arriba a la derecha — ese mismo botón de mute ahora
+  también destraba el autoplay si el navegador lo bloqueó.
   Debajo de "Llegada estimada" hay una caja de trivia grande y destacada
   (pensada para leerse en la transmisión de YouTube) que rota un dato a
   la vez, sin repetir hasta agotar la lista, leyendo trivia.json (array
@@ -346,30 +348,6 @@
     to { transform: translateX(-50%); }
   }
 
-  /* ===== Botón de activar audio (solo aparece si el navegador bloquea
-     el autoplay con sonido) ===== */
-  .audio-unlock {
-    position: fixed;
-    top: 1.6vh;
-    right: 1.6vw;
-    z-index: 8;
-    display: none;
-    align-items: center;
-    gap: 0.5vw;
-    padding: 0.7vh 1.1vw;
-    border-radius: 999px;
-    border: none;
-    background: var(--red);
-    color: #fff;
-    font-family: 'Inter', sans-serif;
-    font-weight: 600;
-    font-size: 0.85vw;
-    cursor: pointer;
-    box-shadow: 0 6px 18px rgba(184,29,21,0.35);
-  }
-
-  .audio-unlock.visible { display: flex; }
-
   /* ===== Controles de música arriba a la izquierda: botón de
      silenciar (siempre visible) + chip "now playing" ===== */
   .music-controls {
@@ -449,7 +427,6 @@
     .unit .label { font-size: 2.2vw; }
     .zocalo-tag { font-size: 3vw; }
     .zocalo-ticker-track { font-size: 2.6vw; }
-    .audio-unlock { font-size: 2.4vw; }
     .mute-toggle { width: 8vw; height: 8vw; font-size: 3.4vw; }
     .now-playing { font-size: 2.2vw; max-width: 50vw; }
     .trivia-label { font-size: 2.6vw; }
@@ -503,7 +480,6 @@
     </div>
   </div>
 
-  <button class="audio-unlock" id="audioUnlock" type="button">🔊 Activar música</button>
   <div class="music-controls">
     <button class="mute-toggle" id="muteToggle" type="button" aria-label="Silenciar música" title="Silenciar música">🔊</button>
     <div class="now-playing" id="nowPlaying"><span class="dot"></span><span class="track-name" id="trackName"></span></div>
@@ -680,7 +656,6 @@
     const MUSIC_MANIFEST_URL = MUSIC_FOLDER + "manifest.json";
 
     const player = document.getElementById("player");
-    const audioUnlockBtn = document.getElementById("audioUnlock");
     const muteToggleBtn = document.getElementById("muteToggle");
     const nowPlayingEl = document.getElementById("nowPlaying");
     const trackNameEl = document.getElementById("trackName");
@@ -695,7 +670,10 @@
     muteToggleBtn.addEventListener("click", () => {
       player.muted = !player.muted;
       updateMuteIcon();
-      if (!player.muted) player.play().catch(() => {});
+      // Sin botón dedicado de "activar audio": este mismo click, al ser
+      // una interacción del usuario, también destraba el autoplay con
+      // sonido si el navegador lo había bloqueado al cargar la página.
+      player.play().catch(() => {});
     });
 
     updateMuteIcon();
@@ -741,9 +719,9 @@
       const playPromise = player.play();
       if (playPromise && typeof playPromise.catch === "function") {
         playPromise.catch(() => {
-          // Autoplay con sonido bloqueado por el navegador: se necesita un
-          // click. Se reintenta apenas el usuario toque el botón.
-          audioUnlockBtn.classList.add("visible");
+          // Autoplay con sonido bloqueado por el navegador: no hay nada
+          // más que hacer acá, se retoma solo con el próximo click en el
+          // botón de silenciar/activar (ver muteToggleBtn más abajo).
         });
       }
     }
@@ -764,13 +742,6 @@
       // Archivo corrupto o formato no soportado: lo salta en vez de
       // trabar la playlist.
       if (playlist.length > 1) playNextTrack();
-    });
-
-    audioUnlockBtn.addEventListener("click", () => {
-      audioUnlockBtn.classList.remove("visible");
-      player.muted = false;
-      updateMuteIcon();
-      player.play().catch(() => {});
     });
 
     (async function loadMusicPlaylist() {
