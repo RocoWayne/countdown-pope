@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.24 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.25 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -39,6 +39,12 @@
   preguntas que se leen de cta.json (array plano de strings, se edita a
   mano, sin Action), sin repetir la misma dos veces seguidas. Duraciones
   configurables en CTA_FIRST_DELAY_MS / CTA_VISIBLE_MS / CTA_INTERVAL_MS.
+  Como la fuente de navegador de OBS carga la página una sola vez y no se
+  refresca sola, cada CONTENT_REFRESH_MS (24 horas) la página vuelve a
+  pedir images/manifest.json, music/manifest.json, trivia.json y cta.json
+  para que el contenido nuevo que se suba al repo mientras está en vivo
+  se refleje solo, sin cortar la música en curso ni reiniciar el carrusel,
+  la trivia o el popup de chat que ya estén activos.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -615,8 +621,15 @@
     // Slideshow de fondo: lee la lista de archivos desde manifest.json
     // (generado automáticamente) y solo agrega las imágenes que
     // efectivamente cargan, así nunca se ve un ícono de imagen rota en OBS.
+    // refreshBackgroundImages() se puede volver a llamar más adelante (ver
+    // CONTENT_REFRESH_MS al final del script): las imágenes ya cargadas no
+    // se tocan, solo se suman las nuevas que hayan aparecido en /images sin
+    // interrumpir el carrusel que ya está en pantalla.
     const bgContainer = document.getElementById("bgContainer");
+    let bgLayers = [];
+    let bgUrls = new Set();
     let currentBg = 0;
+    let bgRotationStarted = false;
 
     function probeImage(url) {
       return new Promise((resolve) => {
@@ -641,34 +654,38 @@
       }
     }
 
-    function startSlideshow(urls) {
-      urls.forEach((url) => {
-        const layer = document.createElement("div");
-        layer.className = "bg-layer";
-        layer.style.backgroundImage = "url('" + url + "')";
-        bgContainer.appendChild(layer);
-      });
-      const layers = document.querySelectorAll(".bg-layer");
-      if (layers.length === 0) return;
-      layers[0].classList.add("active");
-      if (layers.length > 1) {
-        setInterval(() => {
-          layers[currentBg].classList.remove("active");
-          currentBg = (currentBg + 1) % layers.length;
-          layers[currentBg].classList.add("active");
-        }, SLIDESHOW_INTERVAL_MS);
-      }
+    function addBgLayer(url) {
+      const layer = document.createElement("div");
+      layer.className = "bg-layer";
+      layer.style.backgroundImage = "url('" + url + "')";
+      bgContainer.appendChild(layer);
+      bgLayers.push(layer);
+      if (bgLayers.length === 1) layer.classList.add("active");
     }
 
-    (async function loadBackgroundImages() {
+    function ensureBgRotation() {
+      if (bgRotationStarted || bgLayers.length < 2) return;
+      bgRotationStarted = true;
+      setInterval(() => {
+        if (bgLayers.length < 2) return;
+        bgLayers[currentBg].classList.remove("active");
+        currentBg = (currentBg + 1) % bgLayers.length;
+        bgLayers[currentBg].classList.add("active");
+      }, SLIDESHOW_INTERVAL_MS);
+    }
+
+    async function refreshBackgroundImages() {
       const candidates = await loadManifest();
-      const found = [];
       for (const url of candidates) {
+        if (bgUrls.has(url)) continue;
         const ok = await probeImage(url);
-        if (ok) found.push(ok);
+        if (ok) {
+          bgUrls.add(url);
+          addBgLayer(url);
+        }
       }
-      startSlideshow(found);
-    })();
+      ensureBgRotation();
+    }
 
     // ===== Música de fondo: siempre en shuffle, sin repetir tema =====
     // Lee /music/manifest.json (regenerado automáticamente por
@@ -769,21 +786,29 @@
       if (playlist.length > 1) playNextTrack();
     });
 
-    (async function loadMusicPlaylist() {
+    // refreshMusicPlaylist() se vuelve a llamar cada CONTENT_REFRESH_MS: si
+    // ya había música sonando, solo actualiza la lista de temas candidatos
+    // (playlist) sin cortar el tema en curso — los nuevos entran recién
+    // cuando se arma la próxima vuelta del shuffle (buildPlayOrder lee
+    // playlist en el momento, así que ya toma los cambios solo).
+    async function refreshMusicPlaylist() {
       try {
         const res = await fetch(MUSIC_MANIFEST_URL, { cache: "no-store" });
         if (!res.ok) return;
         const files = await res.json();
         if (!Array.isArray(files) || files.length === 0) return;
+        const isFirstLoad = playlist.length === 0;
         playlist = files;
-        playOrder = buildPlayOrder(null);
-        orderIndex = 0;
-        playCurrent();
+        if (isFirstLoad) {
+          playOrder = buildPlayOrder(null);
+          orderIndex = 0;
+          playCurrent();
+        }
       } catch (err) {
         // Sin música configurada o sin servidor (file://): la página
         // sigue funcionando igual, en silencio.
       }
-    })();
+    }
 
     // ===== Caja de trivia: un dato a la vez, rotando sin repetir =====
     // Lee trivia.json (array plano de strings, hasta 240 caracteres cada
@@ -827,28 +852,37 @@
       return order;
     }
 
-    (async function loadTrivia() {
+    // refreshTrivia() se vuelve a llamar cada CONTENT_REFRESH_MS: si la
+    // caja ya estaba rotando, solo reemplaza triviaItems con lo que haya
+    // en trivia.json en ese momento — los datos nuevos entran solos en la
+    // próxima vez que se rebaraja el orden (buildTriviaOrder lee
+    // triviaItems al momento de llamarse), sin cortar la rotación en curso.
+    async function refreshTrivia() {
       try {
         const res = await fetch(TRIVIA_URL, { cache: "no-store" });
         if (!res.ok) return;
         const items = await res.json();
         if (!Array.isArray(items)) return;
-        triviaItems = items
+        const filtered = items
           .map((t) => (typeof t === "string" ? t.trim() : ""))
           .filter((t) => t.length > 0 && t.length <= 240);
-        if (triviaItems.length === 0) return;
-        triviaOrder = buildTriviaOrder(null);
-        triviaOrderIndex = 0;
-        triviaTextEl.textContent = triviaOrder[0];
-        triviaBox.classList.add("visible");
-        if (triviaItems.length > 1) {
-          setInterval(nextTrivia, TRIVIA_INTERVAL_MS);
+        if (filtered.length === 0) return;
+        const isFirstLoad = triviaItems.length === 0;
+        triviaItems = filtered;
+        if (isFirstLoad) {
+          triviaOrder = buildTriviaOrder(null);
+          triviaOrderIndex = 0;
+          triviaTextEl.textContent = triviaOrder[0];
+          triviaBox.classList.add("visible");
+          if (triviaItems.length > 1) {
+            setInterval(nextTrivia, TRIVIA_INTERVAL_MS);
+          }
         }
       } catch (err) {
         // Sin trivia.json o sin servidor (file://): la caja simplemente
         // no se muestra.
       }
-    })();
+    }
 
     // ===== Caja emergente "Participá": invita a comentar en el chat =====
     // Lee cta.json (array plano de strings, se edita a mano, sin Action).
@@ -889,27 +923,57 @@
       setTimeout(() => chatPopup.classList.remove("show"), CTA_VISIBLE_MS);
     }
 
-    (async function loadCta() {
+    // refreshCta() se vuelve a llamar cada CONTENT_REFRESH_MS: si el popup
+    // ya estaba activo, solo reemplaza ctaItems — las preguntas nuevas
+    // entran solas en el próximo sorteo (buildCtaOrder lee ctaItems al
+    // momento de llamarse), sin reiniciar el ciclo de apariciones.
+    async function refreshCta() {
       try {
         const res = await fetch(CTA_URL, { cache: "no-store" });
         if (!res.ok) return;
         const items = await res.json();
         if (!Array.isArray(items)) return;
-        ctaItems = items
+        const filtered = items
           .map((t) => (typeof t === "string" ? t.trim() : ""))
           .filter((t) => t.length > 0 && t.length <= 240);
-        if (ctaItems.length === 0) return;
-        ctaOrder = buildCtaOrder(null);
-        ctaOrderIndex = 0;
-        setTimeout(() => {
-          showChatPopup();
-          setInterval(showChatPopup, CTA_INTERVAL_MS);
-        }, CTA_FIRST_DELAY_MS);
+        if (filtered.length === 0) return;
+        const isFirstLoad = ctaItems.length === 0;
+        ctaItems = filtered;
+        if (isFirstLoad) {
+          ctaOrder = buildCtaOrder(null);
+          ctaOrderIndex = 0;
+          setTimeout(() => {
+            showChatPopup();
+            setInterval(showChatPopup, CTA_INTERVAL_MS);
+          }, CTA_FIRST_DELAY_MS);
+        }
       } catch (err) {
         // Sin cta.json o sin servidor (file://): la caja simplemente
         // no se muestra.
       }
-    })();
+    }
+
+    // ===== Refresco periódico de contenido en vivo =====
+    // La fuente de navegador de OBS carga esta página una sola vez y la
+    // deja corriendo indefinidamente (no se refresca sola). Sin este
+    // bloque, música/trivia/CTAs/imágenes nuevas subidas al repo mientras
+    // ya está en vivo nunca se verían hasta reiniciar la fuente a mano.
+    // Acá se vuelven a pedir todos los archivos fuente cada
+    // CONTENT_REFRESH_MS, sin interrumpir lo que ya está sonando o
+    // mostrándose en pantalla (ver comentarios de cada función refresh*).
+    const CONTENT_REFRESH_MS = 24 * 60 * 60 * 1000; // 24 horas
+
+    refreshBackgroundImages();
+    refreshMusicPlaylist();
+    refreshTrivia();
+    refreshCta();
+
+    setInterval(() => {
+      refreshBackgroundImages();
+      refreshMusicPlaylist();
+      refreshTrivia();
+      refreshCta();
+    }, CONTENT_REFRESH_MS);
   </script>
 </body>
 </html>
