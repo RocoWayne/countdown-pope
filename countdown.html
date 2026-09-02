@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.10 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.11 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -14,6 +14,10 @@
   las imágenes) y se reproduce siempre en orden aleatorio, sin repetir
   un tema hasta que suenen todos los demás. Ver music/README.md. El chip
   "now playing" está anclado arriba a la izquierda.
+  Debajo de "Llegada estimada" hay una caja de trivia que rota un dato
+  a la vez (fade cada 15s, sin repetir hasta agotar la lista), leyendo
+  trivia.json (array plano de strings, máx. 240 caracteres cada uno) —
+  se edita directo, sin Action.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -224,6 +228,47 @@
     color: var(--ink);
   }
 
+  /* ===== Caja de trivia: un dato a la vez, rotando con fade ===== */
+  .trivia-box {
+    display: none;
+    align-items: flex-start;
+    gap: 0.8vw;
+    margin-top: 2.4vh;
+    padding: 1.3vh 1.2vw;
+    max-width: 34vw;
+    background: var(--paper);
+    border: 1px solid var(--hair);
+    border-left: 4px solid var(--red);
+    border-radius: 4px;
+    box-shadow: 0 6px 18px rgba(20,20,26,0.06);
+  }
+
+  .trivia-box.visible { display: flex; }
+
+  .trivia-label {
+    flex: none;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.85vw;
+    letter-spacing: 0.08em;
+    color: var(--red);
+    padding-top: 0.1vh;
+  }
+
+  .trivia-text {
+    font-size: 0.9vw;
+    line-height: 1.45;
+    color: var(--ink);
+    font-weight: 400;
+    opacity: 1;
+    transition: opacity 0.5s ease;
+  }
+
+  .trivia-text.fading {
+    opacity: 0;
+  }
+
   .arrived {
     font-family: 'Barlow Condensed', sans-serif;
     text-transform: uppercase;
@@ -361,6 +406,9 @@
     .zocalo-ticker-track { font-size: 2.6vw; }
     .audio-unlock { font-size: 2.4vw; }
     .now-playing { font-size: 2.2vw; max-width: 60vw; }
+    .trivia-box { max-width: 100%; }
+    .trivia-label { font-size: 2.4vw; }
+    .trivia-text { font-size: 2.6vw; }
   }
 </style>
 </head>
@@ -396,6 +444,11 @@
     </div>
 
     <div class="target-date" id="targetDateLabel"></div>
+
+    <div class="trivia-box" id="triviaBox">
+      <span class="trivia-label">Dato</span>
+      <span class="trivia-text" id="triviaText"></span>
+    </div>
   </div>
 
   <div class="zocalo">
@@ -664,6 +717,71 @@
       } catch (err) {
         // Sin música configurada o sin servidor (file://): la página
         // sigue funcionando igual, en silencio.
+      }
+    })();
+
+    // ===== Caja de trivia: un dato a la vez, rotando sin repetir =====
+    // Lee trivia.json (array plano de strings, hasta 240 caracteres cada
+    // uno) y muestra uno por vez con fade, cambiando cada TRIVIA_INTERVAL_MS.
+    // Editás trivia.json directamente y hacés push — no requiere Action.
+    const TRIVIA_URL = "trivia.json";
+    const TRIVIA_INTERVAL_MS = 15000;
+    const TRIVIA_FADE_MS = 500;
+
+    const triviaBox = document.getElementById("triviaBox");
+    const triviaTextEl = document.getElementById("triviaText");
+
+    let triviaItems = [];
+    let triviaOrder = [];
+    let triviaOrderIndex = 0;
+
+    function showTrivia(text) {
+      triviaTextEl.classList.add("fading");
+      setTimeout(() => {
+        triviaTextEl.textContent = text;
+        triviaTextEl.classList.remove("fading");
+      }, TRIVIA_FADE_MS);
+    }
+
+    function nextTrivia() {
+      if (triviaItems.length === 0) return;
+      triviaOrderIndex++;
+      if (triviaOrderIndex >= triviaOrder.length) {
+        const lastShown = triviaOrder[triviaOrder.length - 1];
+        triviaOrder = buildTriviaOrder(lastShown);
+        triviaOrderIndex = 0;
+      }
+      showTrivia(triviaOrder[triviaOrderIndex]);
+    }
+
+    function buildTriviaOrder(avoidFirst) {
+      const order = shuffle(triviaItems);
+      if (order.length > 1 && order[0] === avoidFirst) {
+        [order[0], order[1]] = [order[1], order[0]];
+      }
+      return order;
+    }
+
+    (async function loadTrivia() {
+      try {
+        const res = await fetch(TRIVIA_URL, { cache: "no-store" });
+        if (!res.ok) return;
+        const items = await res.json();
+        if (!Array.isArray(items)) return;
+        triviaItems = items
+          .map((t) => (typeof t === "string" ? t.trim() : ""))
+          .filter((t) => t.length > 0 && t.length <= 240);
+        if (triviaItems.length === 0) return;
+        triviaOrder = buildTriviaOrder(null);
+        triviaOrderIndex = 0;
+        triviaTextEl.textContent = triviaOrder[0];
+        triviaBox.classList.add("visible");
+        if (triviaItems.length > 1) {
+          setInterval(nextTrivia, TRIVIA_INTERVAL_MS);
+        }
+      } catch (err) {
+        // Sin trivia.json o sin servidor (file://): la caja simplemente
+        // no se muestra.
       }
     })();
   </script>
