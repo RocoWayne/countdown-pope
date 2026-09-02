@@ -1,11 +1,8 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.7 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.8 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
-  Se sacó el texto "countdown-papa · vX.X" que quedaba visible en
-  pantalla (era solo referencia de desarrollo) — la versión ahora vive
-  únicamente acá, en este comentario.
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
   /images se usa, sin convención de nombre. Ver images/README.md.
@@ -13,8 +10,8 @@
   por ahora a pedido — el código queda intacto, ver comentarios en el
   CSS (.zocalo) y en el JS (loadNewsTicker) para reactivarlo.
   La música de fondo se lee de /music/manifest.json (mismo mecanismo que
-  las imágenes) y se reproduce en playlist, una canción tras otra, en
-  loop. Ver music/README.md.
+  las imágenes) y se reproduce siempre en orden aleatorio, sin repetir
+  un tema hasta que suenen todos los demás. Ver music/README.md.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -562,10 +559,13 @@
       startSlideshow(found);
     })();
 
-    // ===== Música de fondo: playlist secuencial en loop =====
+    // ===== Música de fondo: siempre en shuffle, sin repetir tema =====
     // Lee /music/manifest.json (regenerado automáticamente por
-    // .github/workflows/update-music-manifest.yml) y reproduce cada
-    // archivo uno atrás del otro; al terminar el último, vuelve al primero.
+    // .github/workflows/update-music-manifest.yml). Se arma un orden al
+    // azar de toda la playlist y se reproduce esa cola completa antes de
+    // volver a barajar, así no hay repeticiones hasta agotar los temas;
+    // al rebarajar se evita que el primero de la nueva vuelta sea igual
+    // al último de la anterior, para que tampoco se repita en el borde.
     const MUSIC_FOLDER = "music/";
     const MUSIC_MANIFEST_URL = MUSIC_FOLDER + "manifest.json";
 
@@ -575,7 +575,8 @@
     const trackNameEl = document.getElementById("trackName");
 
     let playlist = [];
-    let trackIndex = 0;
+    let playOrder = [];
+    let orderIndex = 0;
 
     function trackDisplayName(filename) {
       return filename
@@ -589,10 +590,26 @@
       nowPlayingEl.classList.add("visible");
     }
 
-    function playTrack(index) {
-      if (playlist.length === 0) return;
-      trackIndex = ((index % playlist.length) + playlist.length) % playlist.length;
-      const file = playlist[trackIndex];
+    function shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function buildPlayOrder(avoidFirst) {
+      const order = shuffle(playlist);
+      if (order.length > 1 && order[0] === avoidFirst) {
+        [order[0], order[1]] = [order[1], order[0]];
+      }
+      return order;
+    }
+
+    function playCurrent() {
+      if (playOrder.length === 0) return;
+      const file = playOrder[orderIndex];
       player.src = MUSIC_FOLDER + file;
       showNowPlaying(file);
       const playPromise = player.play();
@@ -606,7 +623,14 @@
     }
 
     function playNextTrack() {
-      playTrack(trackIndex + 1);
+      if (playlist.length === 0) return;
+      orderIndex++;
+      if (orderIndex >= playOrder.length) {
+        const lastPlayed = playOrder[playOrder.length - 1];
+        playOrder = buildPlayOrder(lastPlayed);
+        orderIndex = 0;
+      }
+      playCurrent();
     }
 
     player.addEventListener("ended", playNextTrack);
@@ -629,7 +653,9 @@
         const files = await res.json();
         if (!Array.isArray(files) || files.length === 0) return;
         playlist = files;
-        playTrack(0);
+        playOrder = buildPlayOrder(null);
+        orderIndex = 0;
+        playCurrent();
       } catch (err) {
         // Sin música configurada o sin servidor (file://): la página
         // sigue funcionando igual, en silencio.
