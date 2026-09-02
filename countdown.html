@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.26 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.27 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
@@ -51,6 +51,14 @@
   "¡EL PAPA LEÓN YA ESTÁ EN ARGENTINA! / Cobertura exclusiva en
   canal26.com" (#arrivalMessage), se oculta el contenido normal
   (countdown/trivia/CTA popup) y la música sigue sonando sin cortes.
+  Hardening pensado para transmisiones de 60+ días corridos: el carrusel
+  de fondo tiene un tope de MAX_BG_LAYERS imágenes en memoria (se van
+  sacando las más viejas); todos los fetch() de manifest/trivia/cta y la
+  carga de cada imagen tienen un timeout de FETCH_TIMEOUT_MS para no
+  quedar colgados ante un cuelgue de red puntual; y si fallan todos los
+  temas de la playlist de música seguidos (ej. manifest desincronizado),
+  se espera MUSIC_ERROR_BACKOFF_MS antes de reintentar en vez de entrar
+  en un loop de reintentos sin parar.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -662,7 +670,31 @@
     const IMAGE_FOLDER = "images/";
     const MANIFEST_URL = IMAGE_FOLDER + "manifest.json";
     const SLIDESHOW_INTERVAL_MS = 12000;
+
+    // Tope de fotos que se mantienen a la vez en memoria/DOM del carrusel.
+    // Pensado para transmisiones muy largas (60+ días): si se van subiendo
+    // fotos nuevas seguido, esto evita que se acumulen para siempre. Al
+    // llegar al tope, se saca la más vieja cada vez que entra una nueva.
+    const MAX_BG_LAYERS = 20;
+
+    // Tiempo máximo de espera para fetch() de manifest.json/trivia.json/
+    // cta.json y para que cargue cada imagen del carrusel. Sin esto, un
+    // cuelgue de red puntual (poco probable pero posible en 60+ días
+    // corridos) podría dejar una carga colgada indefinidamente.
+    const FETCH_TIMEOUT_MS = 15000;
     // ========================
+
+    // fetch() con timeout: aborta el pedido si tarda más de FETCH_TIMEOUT_MS
+    // en vez de quedar esperando para siempre.
+    async function fetchWithTimeout(url) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      try {
+        return await fetch(url, { cache: "no-store", signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+    }
 
     const dateFormatter = new Intl.DateTimeFormat("es-AR", {
       day: "2-digit", month: "long", year: "numeric",
@@ -734,22 +766,41 @@
     function probeImage(url) {
       return new Promise((resolve) => {
         const img = new Image();
-        img.onload = () => resolve(url);
-        img.onerror = () => resolve(null);
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          // No pudimos confirmar que cargó a tiempo: la tratamos como
+          // fallida para esta vuelta, sin bloquear el resto del carrusel.
+          resolve(null);
+        }, FETCH_TIMEOUT_MS);
+        img.onload = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(url);
+        };
+        img.onerror = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(null);
+        };
         img.src = url;
       });
     }
 
     async function loadManifest() {
       try {
-        const res = await fetch(MANIFEST_URL, { cache: "no-store" });
+        const res = await fetchWithTimeout(MANIFEST_URL);
         if (!res.ok) return [];
         const files = await res.json();
         if (!Array.isArray(files)) return [];
         return files.map((name) => IMAGE_FOLDER + name);
       } catch (err) {
-        // Sin servidor (ej. abierto como archivo local) fetch() puede fallar
-        // por CORS; el panel simplemente queda liso, sin romper la página.
+        // Sin servidor (ej. abierto como archivo local), timeout, o fetch()
+        // fallando por CORS; el panel simplemente queda liso, sin romper
+        // la página.
         return [];
       }
     }
@@ -757,10 +808,30 @@
     function addBgLayer(url) {
       const layer = document.createElement("div");
       layer.className = "bg-layer";
+      layer.dataset.url = url;
       layer.style.backgroundImage = "url('" + url + "')";
       bgContainer.appendChild(layer);
       bgLayers.push(layer);
       if (bgLayers.length === 1) layer.classList.add("active");
+      trimBgLayers();
+    }
+
+    // Saca del DOM las capas más viejas por encima de MAX_BG_LAYERS, para
+    // que el carrusel no acumule imágenes en memoria para siempre en una
+    // transmisión de meses. La url sacada también se borra de bgUrls, así
+    // si sigue estando en el manifest se puede volver a sumar más adelante.
+    function trimBgLayers() {
+      while (bgLayers.length > MAX_BG_LAYERS) {
+        const removed = bgLayers.shift();
+        bgUrls.delete(removed.dataset.url);
+        const wasActive = removed.classList.contains("active");
+        removed.remove();
+        currentBg = Math.max(0, currentBg - 1);
+        if (wasActive && bgLayers.length > 0) {
+          currentBg = currentBg % bgLayers.length;
+          bgLayers[currentBg].classList.add("active");
+        }
+      }
     }
 
     function ensureBgRotation() {
@@ -880,10 +951,29 @@
     }
 
     player.addEventListener("ended", playNextTrack);
+
+    // Si un archivo falla (corrupto, formato no soportado, 404), se saltea
+    // al siguiente en vez de trabar la playlist. Pero si fallan todos los
+    // temas seguidos (ej. manifest desincronizado con archivos borrados),
+    // sin este freno se dispara un loop de reintentos muy rápido sin parar
+    // — acá, después de agotar la playlist completa en fila de errores, se
+    // espera MUSIC_ERROR_BACKOFF_MS antes de volver a intentar.
+    const MUSIC_ERROR_BACKOFF_MS = 30000;
+    let consecutiveTrackErrors = 0;
+
+    player.addEventListener("playing", () => {
+      consecutiveTrackErrors = 0;
+    });
+
     player.addEventListener("error", () => {
-      // Archivo corrupto o formato no soportado: lo salta en vez de
-      // trabar la playlist.
-      if (playlist.length > 1) playNextTrack();
+      if (playlist.length === 0) return;
+      consecutiveTrackErrors++;
+      if (consecutiveTrackErrors >= playlist.length) {
+        consecutiveTrackErrors = 0;
+        setTimeout(playNextTrack, MUSIC_ERROR_BACKOFF_MS);
+        return;
+      }
+      playNextTrack();
     });
 
     // refreshMusicPlaylist() se vuelve a llamar cada CONTENT_REFRESH_MS: si
@@ -893,7 +983,7 @@
     // playlist en el momento, así que ya toma los cambios solo).
     async function refreshMusicPlaylist() {
       try {
-        const res = await fetch(MUSIC_MANIFEST_URL, { cache: "no-store" });
+        const res = await fetchWithTimeout(MUSIC_MANIFEST_URL);
         if (!res.ok) return;
         const files = await res.json();
         if (!Array.isArray(files) || files.length === 0) return;
@@ -959,7 +1049,7 @@
     // triviaItems al momento de llamarse), sin cortar la rotación en curso.
     async function refreshTrivia() {
       try {
-        const res = await fetch(TRIVIA_URL, { cache: "no-store" });
+        const res = await fetchWithTimeout(TRIVIA_URL);
         if (!res.ok) return;
         const items = await res.json();
         if (!Array.isArray(items)) return;
@@ -1029,7 +1119,7 @@
     // momento de llamarse), sin reiniciar el ciclo de apariciones.
     async function refreshCta() {
       try {
-        const res = await fetch(CTA_URL, { cache: "no-store" });
+        const res = await fetchWithTimeout(CTA_URL);
         if (!res.ok) return;
         const items = await res.json();
         if (!Array.isArray(items)) return;
