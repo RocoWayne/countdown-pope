@@ -26,7 +26,7 @@
   TRIVIA_INTERVAL_MS, en el bloque CONFIGURACIÓN del script.
   Debajo de la caja de trivia hay un call to action fijo: "Más noticias
   en canal26.com", con la URL en rojo (.cta-link).
-  El logo del canal (canal26-logo-.png, en la raíz del repo) va arriba a
+  El logo del canal (canal26-logo.png, en la raíz del repo) va arriba a
   la derecha como bug de transmisión. Si el archivo todavía no está
   subido, la imagen se auto-oculta (onerror) en vez de romper la página.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
@@ -370,7 +370,7 @@
   }
 
   /* ===== Logo del canal, arriba a la derecha (bug de transmisión) =====
-     Se oculta solo si canal26-logo-.png todavía no está en el repo, así
+     Se oculta solo si canal26-logo.png todavía no está en el repo, así
      nunca se ve un ícono de imagen rota en la transmisión. */
   .channel-logo {
     position: fixed;
@@ -511,7 +511,7 @@
     <div class="cta-line">Más noticias en <a class="cta-link" href="https://www.canal26.com" target="_blank" rel="noopener">canal26.com</a></div>
   </div>
 
-  <img class="channel-logo" id="channelLogo" src="canal26-logo-.png" alt="Canal 26" onerror="this.remove()">
+  <img class="channel-logo" id="channelLogo" src="canal26-logo.png" alt="Canal 26" onerror="this.remove()">
 
   <div class="zocalo">
     <div class="zocalo-tag">Última hora</div>
