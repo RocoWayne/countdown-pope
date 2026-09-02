@@ -1,14 +1,17 @@
 <!DOCTYPE html>
 <!--
   Countdown Visita del Papa a la Argentina — pantalla para OBS
-  VERSION: v2.4 (2026-09-02) — estética adaptada al look and feel de Canal 26
+  VERSION: v2.5 (2026-09-02) — estética adaptada al look and feel de Canal 26
   (fondo blanco, rojo de noticiero, negro, tipografía condensada, zócalo).
   Las imágenes de fondo se leen de /images/manifest.json (regenerado
   automáticamente por un GitHub Action) — cualquier .jpg/.jpeg/.png en
   /images se usa, sin convención de nombre. Ver images/README.md.
-  El zócalo ahora muestra las últimas noticias del tag Papa León XIV de
+  El zócalo muestra las últimas noticias del tag Papa León XIV de
   canal26.com, leídas de news.json (regenerado cada 20 min por
   .github/workflows/update-news.yml). Ver scripts/fetch_news.py.
+  La música de fondo se lee de /music/manifest.json (mismo mecanismo que
+  las imágenes) y se reproduce en playlist, una canción tras otra, en
+  loop. Ver music/README.md.
   Cómo editar la fecha objetivo: buscar la constante TARGET_DATE más abajo.
 -->
 <html lang="es">
@@ -290,6 +293,67 @@
     letter-spacing: 0.06em;
   }
 
+  /* ===== Botón de activar audio (solo aparece si el navegador bloquea
+     el autoplay con sonido) ===== */
+  .audio-unlock {
+    position: fixed;
+    top: 1.6vh;
+    right: 1.6vw;
+    z-index: 8;
+    display: none;
+    align-items: center;
+    gap: 0.5vw;
+    padding: 0.7vh 1.1vw;
+    border-radius: 999px;
+    border: none;
+    background: var(--red);
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 0.85vw;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(184,29,21,0.35);
+  }
+
+  .audio-unlock.visible { display: flex; }
+
+  .now-playing {
+    position: fixed;
+    top: 1.6vh;
+    right: 1.6vw;
+    z-index: 7;
+    display: none;
+    align-items: center;
+    gap: 0.5vw;
+    padding: 0.6vh 1vw;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.9);
+    border: 1px solid var(--hair);
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 0.75vw;
+    color: var(--ink-dim);
+    max-width: 22vw;
+  }
+
+  .now-playing.visible { display: flex; }
+
+  .now-playing .dot {
+    width: 0.5vw;
+    height: 0.5vw;
+    min-width: 7px;
+    min-height: 7px;
+    border-radius: 50%;
+    background: var(--red);
+    flex: none;
+  }
+
+  .now-playing .track-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   @media (max-width: 900px) {
     .content { width: 100%; padding: 6vh 6vw 12vh; }
     .photo-panel { width: 100%; opacity: 0.18; }
@@ -299,6 +363,8 @@
     .unit .label { font-size: 2.2vw; }
     .zocalo-tag { font-size: 3vw; }
     .zocalo-ticker-track { font-size: 2.6vw; }
+    .audio-unlock { font-size: 2.4vw; }
+    .now-playing { font-size: 2.2vw; max-width: 60vw; }
   }
 </style>
 </head>
@@ -343,7 +409,11 @@
     </div>
   </div>
 
-  <div class="version-tag">countdown-papa · v2.4</div>
+  <div class="version-tag">countdown-papa · v2.5</div>
+
+  <button class="audio-unlock" id="audioUnlock" type="button">🔊 Activar música</button>
+  <div class="now-playing" id="nowPlaying"><span class="dot"></span><span class="track-name" id="trackName"></span></div>
+  <audio id="player" preload="auto"></audio>
 
   <script>
     // ==== CONFIGURACIÓN ====
@@ -495,6 +565,80 @@
         if (ok) found.push(ok);
       }
       startSlideshow(found);
+    })();
+
+    // ===== Música de fondo: playlist secuencial en loop =====
+    // Lee /music/manifest.json (regenerado automáticamente por
+    // .github/workflows/update-music-manifest.yml) y reproduce cada
+    // archivo uno atrás del otro; al terminar el último, vuelve al primero.
+    const MUSIC_FOLDER = "music/";
+    const MUSIC_MANIFEST_URL = MUSIC_FOLDER + "manifest.json";
+
+    const player = document.getElementById("player");
+    const audioUnlockBtn = document.getElementById("audioUnlock");
+    const nowPlayingEl = document.getElementById("nowPlaying");
+    const trackNameEl = document.getElementById("trackName");
+
+    let playlist = [];
+    let trackIndex = 0;
+
+    function trackDisplayName(filename) {
+      return filename
+        .replace(/\.[^.]+$/, "")
+        .replace(/[_-]+/g, " ")
+        .trim();
+    }
+
+    function showNowPlaying(filename) {
+      trackNameEl.textContent = "♪ " + trackDisplayName(filename);
+      nowPlayingEl.classList.add("visible");
+    }
+
+    function playTrack(index) {
+      if (playlist.length === 0) return;
+      trackIndex = ((index % playlist.length) + playlist.length) % playlist.length;
+      const file = playlist[trackIndex];
+      player.src = MUSIC_FOLDER + file;
+      showNowPlaying(file);
+      const playPromise = player.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {
+          // Autoplay con sonido bloqueado por el navegador: se necesita un
+          // click. Se reintenta apenas el usuario toque el botón.
+          audioUnlockBtn.classList.add("visible");
+        });
+      }
+    }
+
+    function playNextTrack() {
+      playTrack(trackIndex + 1);
+    }
+
+    player.addEventListener("ended", playNextTrack);
+    player.addEventListener("error", () => {
+      // Archivo corrupto o formato no soportado: lo salta en vez de
+      // trabar la playlist.
+      if (playlist.length > 1) playNextTrack();
+    });
+
+    audioUnlockBtn.addEventListener("click", () => {
+      audioUnlockBtn.classList.remove("visible");
+      player.muted = false;
+      player.play().catch(() => {});
+    });
+
+    (async function loadMusicPlaylist() {
+      try {
+        const res = await fetch(MUSIC_MANIFEST_URL, { cache: "no-store" });
+        if (!res.ok) return;
+        const files = await res.json();
+        if (!Array.isArray(files) || files.length === 0) return;
+        playlist = files;
+        playTrack(0);
+      } catch (err) {
+        // Sin música configurada o sin servidor (file://): la página
+        // sigue funcionando igual, en silencio.
+      }
     })();
   </script>
 </body>

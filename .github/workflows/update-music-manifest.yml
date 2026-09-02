@@ -1,0 +1,59 @@
+name: Update music manifest
+
+# Regenera music/manifest.json con la lista de .mp3/.ogg/.wav/.m4a que
+# haya en /music, cada vez que se sube o borra un archivo ahí. No requiere
+# ningún nombre de archivo específico.
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "music/**.mp3"
+      - "music/**.ogg"
+      - "music/**.wav"
+      - "music/**.m4a"
+
+permissions:
+  contents: write
+
+jobs:
+  update-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate music/manifest.json
+        run: |
+          cd music
+          {
+            echo "["
+            first=1
+            for f in *.mp3 *.ogg *.wav *.m4a *.MP3 *.OGG *.WAV *.M4A; do
+              [ -e "$f" ] || continue
+              [ "$first" = 1 ] && first=0 || echo ","
+              printf '  "%s"' "$f"
+            done
+            echo ""
+            echo "]"
+          } > manifest.json
+          cat manifest.json
+
+      - name: Commit manifest if changed
+        run: |
+          if ! git diff --quiet -- music/manifest.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add music/manifest.json
+            git commit -m "Update music/manifest.json [skip ci]"
+            for i in 1 2 3 4 5; do
+              git push && exit 0
+              echo "Push rejected, rebasing on top of origin/${GITHUB_REF_NAME} and retrying..."
+              git fetch origin "${GITHUB_REF_NAME}"
+              git rebase "origin/${GITHUB_REF_NAME}"
+              sleep 3
+            done
+            echo "::error::Could not push music/manifest.json after retries"
+            exit 1
+          else
+            echo "manifest.json unchanged"
+          fi
