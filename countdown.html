@@ -35,10 +35,12 @@
   estaba el tag de versión) figura el crédito "© Reuters".
   Hay una caja emergente "Participá" que entra deslizándose desde el
   borde derecho invitando a comentar en el chat: aparece a los 5s de
-  cargada la página, se queda 12s visible y vuelve cada 5 minutos, con
+  cargada la página, se queda 12s visible y vuelve cada tanto (intervalo
+  aleatorio entre 3 y 7 minutos, para que no se vuelva predecible), con
   preguntas que se leen de cta.json (array plano de strings, se edita a
   mano, sin Action), sin repetir la misma dos veces seguidas. Duraciones
-  configurables en CTA_FIRST_DELAY_MS / CTA_VISIBLE_MS / CTA_INTERVAL_MS.
+  configurables en CTA_FIRST_DELAY_MS / CTA_VISIBLE_MS /
+  CTA_INTERVAL_MIN_MS / CTA_INTERVAL_MAX_MS.
   Como la fuente de navegador de OBS carga la página una sola vez y no se
   refresca sola, cada CONTENT_REFRESH_MS (24 horas) la página vuelve a
   pedir images/manifest.json, music/manifest.json, trivia.json y cta.json
@@ -760,7 +762,6 @@
     let tickIntervalId = null;
     let triviaIntervalId = null;
     let ctaTimeoutId = null;
-    let ctaIntervalId = null;
 
     function activateArrivalMode() {
       if (arrivalModeActive) return;
@@ -772,7 +773,6 @@
       if (tickIntervalId) clearInterval(tickIntervalId);
       if (triviaIntervalId) clearInterval(triviaIntervalId);
       if (ctaTimeoutId) clearTimeout(ctaTimeoutId);
-      if (ctaIntervalId) clearInterval(ctaIntervalId);
     }
 
     function tick() {
@@ -1151,13 +1151,28 @@
     // ===== Caja emergente "Participá": invita a comentar en el chat =====
     // Lee cta.json (array plano de strings, se edita a mano, sin Action).
     // Aparece a los CTA_FIRST_DELAY_MS de cargada la página, se mantiene
-    // visible CTA_VISIBLE_MS y vuelve a aparecer cada CTA_INTERVAL_MS,
-    // siempre con una pregunta distinta a la anterior (mismo shuffle sin
-    // repetición que ya usan la música y la trivia).
+    // visible CTA_VISIBLE_MS y vuelve a aparecer cada tanto con un
+    // intervalo aleatorio entre CTA_INTERVAL_MIN_MS y CTA_INTERVAL_MAX_MS
+    // (en vez de un intervalo fijo) para que no se vuelva predecible y la
+    // gente deje de prestarle atención, siempre con una pregunta distinta
+    // a la anterior (mismo shuffle sin repetición que ya usan la música y
+    // la trivia).
     const CTA_URL = "cta.json";
     const CTA_FIRST_DELAY_MS = 5000;
     const CTA_VISIBLE_MS = 12000;
-    const CTA_INTERVAL_MS = 5 * 60 * 1000;
+    const CTA_INTERVAL_MIN_MS = 3 * 60 * 1000;
+    const CTA_INTERVAL_MAX_MS = 7 * 60 * 1000;
+
+    function randomCtaInterval() {
+      return CTA_INTERVAL_MIN_MS + Math.random() * (CTA_INTERVAL_MAX_MS - CTA_INTERVAL_MIN_MS);
+    }
+
+    function scheduleNextCta() {
+      ctaTimeoutId = setTimeout(() => {
+        showChatPopup();
+        scheduleNextCta();
+      }, randomCtaInterval());
+    }
 
     const chatPopup = document.getElementById("chatPopup");
     const chatPopupTextEl = document.getElementById("chatPopupText");
@@ -1208,7 +1223,7 @@
           ctaOrderIndex = 0;
           ctaTimeoutId = setTimeout(() => {
             showChatPopup();
-            ctaIntervalId = setInterval(showChatPopup, CTA_INTERVAL_MS);
+            scheduleNextCta();
           }, CTA_FIRST_DELAY_MS);
         }
       } catch (err) {
