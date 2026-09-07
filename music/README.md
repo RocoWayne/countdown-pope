@@ -28,9 +28,12 @@ así que lee `manifest.json`, que se regenera solo:
   pero el autoplay muteado siempre está permitido. La página arranca el
   primer tema muteado a propósito y le saca el mute apenas confirma que
   empezó a sonar, así la música arranca sola, con sonido, sin necesitar
-  ningún click. Si igual quedara bloqueada (política muy estricta del
-  navegador), el botón de silenciar/activar (arriba a la izquierda)
-  destraba el audio con el primer click.
-- En OBS, además, activá "Control audio via OBS" en las propiedades de la
-  fuente de Navegador — así el audio pasa por el mezclador de OBS en vez
-  de depender del bloqueo de autoplay del navegador embebido.
+  ningún click. Si el navegador igual bloquea ese intento puntual, CUALQUIER
+  interacción con la página (un click en cualquier lado, no hace falta que
+  sea justo el ícono de silenciar) reintenta destrabar el audio solo.
+- **En OBS específicamente**: las versiones de OBS con CEF actualizado
+  aplican esta misma política de autoplay que un navegador normal. Activá
+  "Control audio via OBS" en las propiedades de la fuente de Navegador —
+  es el fix real y documentado para este caso, porque le saca a Chromium
+  la restricción de autoplay con sonido en vez de depender de un truco
+  desde el HTML.

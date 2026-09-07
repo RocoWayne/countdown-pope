@@ -21,12 +21,13 @@ El botón de silenciar música (arriba a la izquierda) siempre arranca en
 acción opcional del usuario, a propósito no se guarda entre cargas para
 que la transmisión nunca arranque en silencio por accidente.
 
-La página se recarga sola por completo cada 24 horas (`CONTENT_REFRESH_MS`,
-un `location.reload()`), así que el contenido nuevo (fotos, música, trivia,
-CTAs subidos al repo) y cualquier actualización del propio `countdown.html`
-se reflejan solos en una transmisión ya en vivo, sin tener que tocar la
-fuente de OBS a mano. Implica un corte breve de música y countdown una vez
-al día.
+La página se recarga sola por completo todos los días a las 2 AM hora
+Argentina (`RELOAD_HOUR_ARG`, un `location.reload()`) — horario elegido a
+propósito por ser de poca audiencia, para que el corte breve de música y
+countdown que implica la recarga se note lo menos posible. Así el
+contenido nuevo (fotos, música, trivia, CTAs subidos al repo) y cualquier
+actualización del propio `countdown.html` se reflejan solos en una
+transmisión ya en vivo, sin tener que tocar la fuente de OBS a mano.
 
 ## Modo "el Papa ya llegó" (pantalla de llegada)
 

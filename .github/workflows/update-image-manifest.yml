@@ -8,9 +8,16 @@ on:
   push:
     branches: ["**"]
     paths:
+      # GitHub Actions matchea paths en forma case-sensitive: sin las
+      # variantes en mayúscula, una foto subida como .JPG (común en fotos
+      # de cámara/celular) no dispara este workflow y queda afuera del
+      # manifest para siempre hasta la próxima subida que sí matchee.
       - "images/**.jpg"
       - "images/**.jpeg"
       - "images/**.png"
+      - "images/**.JPG"
+      - "images/**.JPEG"
+      - "images/**.PNG"
 
 permissions:
   contents: write

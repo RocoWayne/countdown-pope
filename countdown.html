@@ -44,9 +44,10 @@
   Como la fuente de navegador de OBS carga la página una sola vez y no se
   refresca sola, al cargar pide images/manifest.json, music/manifest.json,
   trivia.json y cta.json, y además se hace un location.reload() completo
-  cada CONTENT_REFRESH_MS (24 horas) — así la fuente de OBS nunca necesita
-  un refresh manual: cada recarga trae tanto el contenido nuevo (fotos,
-  temas, trivia, CTAs subidos al repo) como cualquier cambio al propio
+  todos los días a las RELOAD_HOUR_ARG (2 AM hora Argentina, horario de
+  poca audiencia a propósito) — así la fuente de OBS nunca necesita un
+  refresh manual: cada recarga trae tanto el contenido nuevo (fotos, temas,
+  trivia, CTAs subidos al repo) como cualquier cambio al propio
   countdown.html pusheado mientras estaba en vivo. Implica un corte breve
   de música/countdown una vez al día, a cambio de no depender de nadie
   tocando la fuente en OBS.
@@ -808,10 +809,6 @@
     // Slideshow de fondo: lee la lista de archivos desde manifest.json
     // (generado automáticamente) y solo agrega las imágenes que
     // efectivamente cargan, así nunca se ve un ícono de imagen rota en OBS.
-    // refreshBackgroundImages() se puede volver a llamar más adelante (ver
-    // CONTENT_REFRESH_MS al final del script): las imágenes ya cargadas no
-    // se tocan, solo se suman las nuevas que hayan aparecido en /images sin
-    // interrumpir el carrusel que ya está en pantalla.
     //
     // La carpeta /images se actualiza casi a diario, así que TODAS las
     // fotos que haya (sin tope) entran al sorteo, en orden aleatorio y sin
@@ -921,11 +918,10 @@
       setInterval(showNextPhoto, SLIDESHOW_INTERVAL_MS);
     }
 
-    // refreshBackgroundImages() se vuelve a llamar cada CONTENT_REFRESH_MS:
-    // las fotos nuevas que hayan aparecido en /images se suman al pool sin
-    // interrumpir la que está en pantalla en ese momento — entran solas en
-    // el próximo sorteo (buildPhotoOrder lee photoUrls al momento de
-    // llamarse), igual que la música y el CTA.
+    // Se llama una sola vez al cargar la página; las fotos nuevas que se
+    // suban a /images entran recién en la próxima recarga diaria completa
+    // (ver RELOAD_HOUR_ARG al final del script) — ya no hay un timer de
+    // refresco en caliente para este archivo.
     async function refreshBackgroundImages() {
       const candidates = await loadManifest();
       const isFirstLoad = photoUrls.length === 0;
@@ -967,8 +963,16 @@
       muteToggleBtn.setAttribute("aria-label", muteToggleBtn.title);
     }
 
+    // userMuted: preferencia EXPLÍCITA del usuario (solo cambia con un
+    // click en este botón). Se mantiene separada del mute técnico que usa
+    // el truco de autoplay más abajo, para que nunca se pisen entre sí —
+    // por ejemplo, para que la red de contención de unlockAudioOnInteraction()
+    // no reactive el sonido si el usuario lo silenció a propósito.
+    let userMuted = false;
+
     muteToggleBtn.addEventListener("click", () => {
-      player.muted = !player.muted;
+      userMuted = !userMuted;
+      player.muted = userMuted;
       updateMuteIcon();
       // Sin botón dedicado de "activar audio": este mismo click, al ser
       // una interacción del usuario, también destraba el autoplay con
@@ -1012,27 +1016,31 @@
     }
 
     // Los navegadores bloquean el autoplay CON sonido sin interacción del
-    // usuario, pero el autoplay MUTEADO siempre está permitido — y una vez
-    // que ya está sonando, sacarle el mute (aunque sea sin click) no cuenta
-    // como "iniciar" reproducción, así que no lo bloquean. Por eso el primer
-    // tema arranca muteado a propósito y se desmutea solo apenas se confirma
-    // que empezó a sonar (evento "playing" más abajo): así la música arranca
-    // sola, con sonido, sin depender de que alguien haga click primero.
-    let autoUnmutePending = true;
+    // usuario, pero el autoplay MUTEADO siempre está permitido. El primer
+    // tema arranca muteado a propósito (si el usuario no lo silenció antes:
+    // no debería pasar tan temprano, pero por las dudas) e intenta sacarle
+    // el mute apenas se confirma que empezó a sonar (evento "playing" más
+    // abajo) — en la mayoría de navegadores y en OBS (con "Control audio
+    // via OBS" activado en la fuente) eso alcanza para que suene solo, sin
+    // ningún click. Si el navegador igual bloquea ese intento puntual (deja
+    // el audio pausado en vez de sonando), unlockAudioOnInteraction() más
+    // abajo es la red de contención: cualquier interacción con la página
+    // (no hace falta que sea justo el ícono de silenciar) reintenta.
+    let firstTrackStarting = true;
 
     function playCurrent() {
       if (playOrder.length === 0) return;
       const file = playOrder[orderIndex];
       player.src = MUSIC_FOLDER + file;
       showNowPlaying(file);
-      if (autoUnmutePending) player.muted = true;
+      if (firstTrackStarting && !userMuted) player.muted = true;
       const playPromise = player.play();
       if (playPromise && typeof playPromise.catch === "function") {
         playPromise.catch(() => {
           // Ni siquiera el autoplay muteado se pudo iniciar (política muy
           // estricta del navegador): no hay nada más que hacer acá, se
-          // retoma solo con el próximo click en el botón de
-          // silenciar/activar (ver muteToggleBtn más abajo).
+          // retoma solo con la próxima interacción (ver
+          // unlockAudioOnInteraction / muteToggleBtn más abajo).
         });
       }
     }
@@ -1061,11 +1069,28 @@
 
     player.addEventListener("playing", () => {
       consecutiveTrackErrors = 0;
-      if (autoUnmutePending) {
-        autoUnmutePending = false;
+      firstTrackStarting = false;
+      if (!userMuted && player.muted) {
         player.muted = false;
         updateMuteIcon();
       }
+    });
+
+    // Red de contención del autoplay: si el intento de arriba (arrancar
+    // muteado y sacarle el mute solo) igual quedó bloqueado por el
+    // navegador — pasa en Chrome/Firefox comunes sin "engagement" previo
+    // con el sitio, fuera de OBS — CUALQUIER interacción con la página
+    // (un click en cualquier lado, no hace falta que sea el ícono de
+    // silenciar) reintenta sacarle el mute y retomar la reproducción.
+    // No pisa un mute deliberado del usuario (chequea userMuted).
+    function unlockAudioOnInteraction() {
+      if (userMuted) return;
+      if (player.muted) player.muted = false;
+      if (player.paused && playOrder.length > 0) player.play().catch(() => {});
+      updateMuteIcon();
+    }
+    ["pointerdown", "keydown"].forEach((evt) => {
+      document.addEventListener(evt, unlockAudioOnInteraction, { passive: true });
     });
 
     player.addEventListener("error", () => {
@@ -1081,11 +1106,9 @@
       playNextTrack();
     });
 
-    // refreshMusicPlaylist() se vuelve a llamar cada CONTENT_REFRESH_MS: si
-    // ya había música sonando, solo actualiza la lista de temas candidatos
-    // (playlist) sin cortar el tema en curso — los nuevos entran recién
-    // cuando se arma la próxima vuelta del shuffle (buildPlayOrder lee
-    // playlist en el momento, así que ya toma los cambios solo).
+    // Se llama una sola vez al cargar la página; los temas nuevos que se
+    // suban a /music entran recién en la próxima recarga diaria completa
+    // (ver RELOAD_HOUR_ARG al final del script).
     async function refreshMusicPlaylist() {
       try {
         const res = await fetchWithTimeout(MUSIC_MANIFEST_URL);
@@ -1162,11 +1185,9 @@
       return order;
     }
 
-    // refreshTrivia() se vuelve a llamar cada CONTENT_REFRESH_MS: si la
-    // caja ya estaba rotando, solo reemplaza triviaItems con lo que haya
-    // en trivia.json en ese momento — los datos nuevos entran solos en la
-    // próxima vez que se rebaraja el orden (buildTriviaOrder lee
-    // triviaItems al momento de llamarse), sin cortar la rotación en curso.
+    // Se llama una sola vez al cargar la página; los datos nuevos que se
+    // editen en trivia.json entran recién en la próxima recarga diaria
+    // completa (ver RELOAD_HOUR_ARG al final del script).
     async function refreshTrivia() {
       try {
         const res = await fetchWithTimeout(TRIVIA_URL);
@@ -1247,10 +1268,9 @@
       setTimeout(() => chatPopup.classList.remove("show"), CTA_VISIBLE_MS);
     }
 
-    // refreshCta() se vuelve a llamar cada CONTENT_REFRESH_MS: si el popup
-    // ya estaba activo, solo reemplaza ctaItems — las preguntas nuevas
-    // entran solas en el próximo sorteo (buildCtaOrder lee ctaItems al
-    // momento de llamarse), sin reiniciar el ciclo de apariciones.
+    // Se llama una sola vez al cargar la página; las preguntas nuevas que
+    // se editen en cta.json entran recién en la próxima recarga diaria
+    // completa (ver RELOAD_HOUR_ARG al final del script).
     async function refreshCta() {
       try {
         const res = await fetchWithTimeout(CTA_URL);
@@ -1281,25 +1301,43 @@
     // deja corriendo indefinidamente (no se refresca sola). Estas llamadas
     // iniciales piden los archivos de datos (manifests de fotos/música,
     // trivia.json, cta.json) apenas carga la página.
-    const CONTENT_REFRESH_MS = 24 * 60 * 60 * 1000; // 24 horas
-
     refreshBackgroundImages();
     refreshMusicPlaylist();
     refreshTrivia();
     refreshCta();
 
-    // Recarga completa una vez al día: a diferencia de solo repetir los
-    // fetch() de arriba (que solo actualizan datos, nunca el propio
-    // countdown.html), una recarga real de la página también trae
-    // cualquier cambio que se haya pusheado al HTML/CSS/JS del countdown
-    // mientras estaba en vivo — así la fuente de navegador de OBS nunca
-    // necesita un refresh manual, ni para contenido nuevo (fotos/música
-    // sumadas al repo) ni para una actualización del código. Es un
-    // location.reload() liso: implica un corte breve de música/countdown
-    // una vez cada 24hs, a cambio de no depender de nadie tocando OBS.
+    // Recarga completa una vez al día, a las RELOAD_HOUR_ARG (hora
+    // Argentina) — horario de poca audiencia a propósito, para que el
+    // corte breve de música/countdown que implica un location.reload() se
+    // note lo menos posible. A diferencia de solo repetir los fetch() de
+    // arriba (que solo actualizan datos, nunca el propio countdown.html),
+    // una recarga real de la página también trae cualquier cambio que se
+    // haya pusheado al HTML/CSS/JS mientras estaba en vivo — así la fuente
+    // de navegador de OBS nunca necesita un refresh manual, ni para
+    // contenido nuevo (fotos/música sumadas al repo) ni para una
+    // actualización del código.
+    //
+    // Argentina usa UTC-3 todo el año (sin horario de verano), así que la
+    // cuenta se hace directo en UTC sin depender de la zona horaria del
+    // sistema que corre el navegador/OBS.
+    const RELOAD_HOUR_ARG = 2; // 2 AM hora Argentina
+    const RELOAD_HOUR_UTC = (RELOAD_HOUR_ARG + 3) % 24; // 2 AM ARG = 05:00 UTC
+
+    function msUntilNextDailyReload() {
+      const now = new Date();
+      const next = new Date(Date.UTC(
+        now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+        RELOAD_HOUR_UTC, 0, 0, 0
+      ));
+      if (next.getTime() <= now.getTime()) {
+        next.setUTCDate(next.getUTCDate() + 1);
+      }
+      return next.getTime() - now.getTime();
+    }
+
     setTimeout(() => {
       location.reload();
-    }, CONTENT_REFRESH_MS);
+    }, msUntilNextDailyReload());
   </script>
 </body>
 </html>
