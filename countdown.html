@@ -42,11 +42,14 @@
   configurables en CTA_FIRST_DELAY_MS / CTA_VISIBLE_MS /
   CTA_INTERVAL_MIN_MS / CTA_INTERVAL_MAX_MS.
   Como la fuente de navegador de OBS carga la página una sola vez y no se
-  refresca sola, cada CONTENT_REFRESH_MS (24 horas) la página vuelve a
-  pedir images/manifest.json, music/manifest.json, trivia.json y cta.json
-  para que el contenido nuevo que se suba al repo mientras está en vivo
-  se refleje solo, sin cortar la música en curso ni reiniciar el carrusel,
-  la trivia o el popup de chat que ya estén activos.
+  refresca sola, al cargar pide images/manifest.json, music/manifest.json,
+  trivia.json y cta.json, y además se hace un location.reload() completo
+  cada CONTENT_REFRESH_MS (24 horas) — así la fuente de OBS nunca necesita
+  un refresh manual: cada recarga trae tanto el contenido nuevo (fotos,
+  temas, trivia, CTAs subidos al repo) como cualquier cambio al propio
+  countdown.html pusheado mientras estaba en vivo. Implica un corte breve
+  de música/countdown una vez al día, a cambio de no depender de nadie
+  tocando la fuente en OBS.
   Cuando el countdown llega a cero, tick() agrega la clase
   "papal-arrival-mode" al body (una sola vez): el panel de fotos pasa a
   ocupar toda la pantalla con un degradado oscuro atrás del mensaje
@@ -1275,12 +1278,9 @@
 
     // ===== Refresco periódico de contenido en vivo =====
     // La fuente de navegador de OBS carga esta página una sola vez y la
-    // deja corriendo indefinidamente (no se refresca sola). Sin este
-    // bloque, música/trivia/CTAs/imágenes nuevas subidas al repo mientras
-    // ya está en vivo nunca se verían hasta reiniciar la fuente a mano.
-    // Acá se vuelven a pedir todos los archivos fuente cada
-    // CONTENT_REFRESH_MS, sin interrumpir lo que ya está sonando o
-    // mostrándose en pantalla (ver comentarios de cada función refresh*).
+    // deja corriendo indefinidamente (no se refresca sola). Estas llamadas
+    // iniciales piden los archivos de datos (manifests de fotos/música,
+    // trivia.json, cta.json) apenas carga la página.
     const CONTENT_REFRESH_MS = 24 * 60 * 60 * 1000; // 24 horas
 
     refreshBackgroundImages();
@@ -1288,11 +1288,17 @@
     refreshTrivia();
     refreshCta();
 
-    setInterval(() => {
-      refreshBackgroundImages();
-      refreshMusicPlaylist();
-      refreshTrivia();
-      refreshCta();
+    // Recarga completa una vez al día: a diferencia de solo repetir los
+    // fetch() de arriba (que solo actualizan datos, nunca el propio
+    // countdown.html), una recarga real de la página también trae
+    // cualquier cambio que se haya pusheado al HTML/CSS/JS del countdown
+    // mientras estaba en vivo — así la fuente de navegador de OBS nunca
+    // necesita un refresh manual, ni para contenido nuevo (fotos/música
+    // sumadas al repo) ni para una actualización del código. Es un
+    // location.reload() liso: implica un corte breve de música/countdown
+    // una vez cada 24hs, a cambio de no depender de nadie tocando OBS.
+    setTimeout(() => {
+      location.reload();
     }, CONTENT_REFRESH_MS);
   </script>
 </body>
