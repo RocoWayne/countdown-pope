@@ -24,8 +24,13 @@ así que lee `manifest.json`, que se regenera solo:
 ## Notas
 
 - Si la carpeta está vacía, el countdown funciona igual, sin música.
-- Los navegadores (y OBS) suelen bloquear el autoplay con sonido hasta que
-  haya alguna interacción. La página maneja esto: si el autoplay es
-  bloqueado, muestra un botón chico "🔊 Activar música" una sola vez.
-  En OBS, activá "Control audio via OBS" en las propiedades de la fuente
-  de Navegador para que no dependa de esto.
+- Los navegadores bloquean el autoplay CON sonido sin interacción previa,
+  pero el autoplay muteado siempre está permitido. La página arranca el
+  primer tema muteado a propósito y le saca el mute apenas confirma que
+  empezó a sonar, así la música arranca sola, con sonido, sin necesitar
+  ningún click. Si igual quedara bloqueada (política muy estricta del
+  navegador), el botón de silenciar/activar (arriba a la izquierda)
+  destraba el audio con el primer click.
+- En OBS, además, activá "Control audio via OBS" en las propiedades de la
+  fuente de Navegador — así el audio pasa por el mezclador de OBS en vez
+  de depender del bloqueo de autoplay del navegador embebido.

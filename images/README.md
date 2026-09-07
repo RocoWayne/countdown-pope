@@ -1,8 +1,10 @@
 # Imágenes de fondo del Papa
 
 Poné acá las fotos que quieras usar en el countdown (`../countdown.html`).
-**No hay ninguna regla de nombre**: cualquier `.jpg`, `.jpeg` o `.png` que
-haya en esta carpeta se va a usar, en orden alfabético.
+**No hay ninguna regla de nombre ni tope de cantidad**: cualquier `.jpg`,
+`.jpeg` o `.png` que haya en esta carpeta entra al carrusel, en orden
+aleatorio (shuffle) y sin repetir ninguna hasta que salieron todas —
+pensado para una carpeta que se actualiza casi a diario.
 
 ## Cómo funciona
 

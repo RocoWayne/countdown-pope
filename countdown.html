@@ -54,13 +54,15 @@
   canal26.com" (#arrivalMessage), se oculta el contenido normal
   (countdown/trivia/CTA popup) y la música sigue sonando sin cortes.
   Hardening pensado para transmisiones de 60+ días corridos: el carrusel
-  de fondo tiene un tope de MAX_BG_LAYERS imágenes en memoria (se van
-  sacando las más viejas); todos los fetch() de manifest/trivia/cta y la
-  carga de cada imagen tienen un timeout de FETCH_TIMEOUT_MS para no
-  quedar colgados ante un cuelgue de red puntual; y si fallan todos los
-  temas de la playlist de música seguidos (ej. manifest desincronizado),
-  se espera MUSIC_ERROR_BACKOFF_MS antes de reintentar en vez de entrar
-  en un loop de reintentos sin parar.
+  de fondo sortea TODAS las fotos de /images (sin tope, la carpeta se
+  actualiza casi a diario) pero solo materializa 2 <div> de fondo a la vez
+  (cross-fade), así la memoria no crece aunque se sigan sumando fotos con
+  el tiempo; todos los fetch() de manifest/trivia/cta y la carga de cada
+  imagen tienen un timeout de FETCH_TIMEOUT_MS para no quedar colgados
+  ante un cuelgue de red puntual; y si fallan todos los temas de la
+  playlist de música seguidos (ej. manifest desincronizado), se espera
+  MUSIC_ERROR_BACKOFF_MS antes de reintentar en vez de entrar en un loop
+  de reintentos sin parar.
   Más hardening: al entrar en modo llegada se frenan los timers de
   countdown/trivia/CTA (no tiene sentido dejarlos corriendo de fondo para
   siempre, ese modo no tiene vuelta atrás); si music/manifest.json queda
@@ -711,12 +713,6 @@
     const MANIFEST_URL = IMAGE_FOLDER + "manifest.json";
     const SLIDESHOW_INTERVAL_MS = 12000;
 
-    // Tope de fotos que se mantienen a la vez en memoria/DOM del carrusel.
-    // Pensado para transmisiones muy largas (60+ días): si se van subiendo
-    // fotos nuevas seguido, esto evita que se acumulen para siempre. Al
-    // llegar al tope, se saca la más vieja cada vez que entra una nueva.
-    const MAX_BG_LAYERS = 20;
-
     // Tiempo máximo de espera para fetch() de manifest.json/trivia.json/
     // cta.json y para que cargue cada imagen del carrusel. Sin esto, un
     // cuelgue de red puntual (poco probable pero posible en 60+ días
@@ -813,11 +809,64 @@
     // CONTENT_REFRESH_MS al final del script): las imágenes ya cargadas no
     // se tocan, solo se suman las nuevas que hayan aparecido en /images sin
     // interrumpir el carrusel que ya está en pantalla.
+    //
+    // La carpeta /images se actualiza casi a diario, así que TODAS las
+    // fotos que haya (sin tope) entran al sorteo, en orden aleatorio y sin
+    // repetir ninguna hasta que salieron todas — mismo patrón de shuffle
+    // que ya usan la música y el popup de CTA (ver buildPlayOrder /
+    // buildCtaOrder). La memoria se mantiene acotada aunque la carpeta
+    // crezca para siempre: solo se materializan 2 <div> de fondo (cross-
+    // fade), nunca uno por foto — a diferencia del tope fijo de versiones
+    // anteriores (MAX_BG_LAYERS), acá ya no hace falta descartar fotos
+    // viejas para cuidar la memoria.
     const bgContainer = document.getElementById("bgContainer");
-    let bgLayers = [];
-    let bgUrls = new Set();
-    let currentBg = 0;
+    const bgLayerA = document.createElement("div");
+    const bgLayerB = document.createElement("div");
+    bgLayerA.className = "bg-layer";
+    bgLayerB.className = "bg-layer";
+    bgContainer.appendChild(bgLayerA);
+    bgContainer.appendChild(bgLayerB);
+    let activeBgLayer = bgLayerA;
+    let inactiveBgLayer = bgLayerB;
+
+    let photoUrls = [];
+    let photoUrlSet = new Set();
+    let photoOrder = [];
+    let photoOrderIndex = 0;
     let bgRotationStarted = false;
+
+    function buildPhotoOrder(avoidFirst) {
+      const order = shuffle(photoUrls);
+      if (order.length > 1 && order[0] === avoidFirst) {
+        [order[0], order[1]] = [order[1], order[0]];
+      }
+      return order;
+    }
+
+    function nextPhotoUrl() {
+      if (photoOrderIndex >= photoOrder.length) {
+        const lastShown = photoOrder[photoOrder.length - 1];
+        photoOrder = buildPhotoOrder(lastShown);
+        photoOrderIndex = 0;
+      }
+      const url = photoOrder[photoOrderIndex];
+      photoOrderIndex++;
+      return url;
+    }
+
+    function showPhoto(url) {
+      inactiveBgLayer.style.backgroundImage = "url('" + url + "')";
+      inactiveBgLayer.classList.add("active");
+      activeBgLayer.classList.remove("active");
+      const swap = activeBgLayer;
+      activeBgLayer = inactiveBgLayer;
+      inactiveBgLayer = swap;
+    }
+
+    function showNextPhoto() {
+      if (photoUrls.length === 0) return;
+      showPhoto(nextPhotoUrl());
+    }
 
     function probeImage(url) {
       return new Promise((resolve) => {
@@ -863,55 +912,32 @@
       }
     }
 
-    function addBgLayer(url) {
-      const layer = document.createElement("div");
-      layer.className = "bg-layer";
-      layer.dataset.url = url;
-      layer.style.backgroundImage = "url('" + url + "')";
-      bgContainer.appendChild(layer);
-      bgLayers.push(layer);
-      if (bgLayers.length === 1) layer.classList.add("active");
-      trimBgLayers();
-    }
-
-    // Saca del DOM las capas más viejas por encima de MAX_BG_LAYERS, para
-    // que el carrusel no acumule imágenes en memoria para siempre en una
-    // transmisión de meses. La url sacada también se borra de bgUrls, así
-    // si sigue estando en el manifest se puede volver a sumar más adelante.
-    function trimBgLayers() {
-      while (bgLayers.length > MAX_BG_LAYERS) {
-        const removed = bgLayers.shift();
-        bgUrls.delete(removed.dataset.url);
-        const wasActive = removed.classList.contains("active");
-        removed.remove();
-        currentBg = Math.max(0, currentBg - 1);
-        if (wasActive && bgLayers.length > 0) {
-          currentBg = currentBg % bgLayers.length;
-          bgLayers[currentBg].classList.add("active");
-        }
-      }
-    }
-
     function ensureBgRotation() {
-      if (bgRotationStarted || bgLayers.length < 2) return;
+      if (bgRotationStarted || photoUrls.length < 2) return;
       bgRotationStarted = true;
-      setInterval(() => {
-        if (bgLayers.length < 2) return;
-        bgLayers[currentBg].classList.remove("active");
-        currentBg = (currentBg + 1) % bgLayers.length;
-        bgLayers[currentBg].classList.add("active");
-      }, SLIDESHOW_INTERVAL_MS);
+      setInterval(showNextPhoto, SLIDESHOW_INTERVAL_MS);
     }
 
+    // refreshBackgroundImages() se vuelve a llamar cada CONTENT_REFRESH_MS:
+    // las fotos nuevas que hayan aparecido en /images se suman al pool sin
+    // interrumpir la que está en pantalla en ese momento — entran solas en
+    // el próximo sorteo (buildPhotoOrder lee photoUrls al momento de
+    // llamarse), igual que la música y el CTA.
     async function refreshBackgroundImages() {
       const candidates = await loadManifest();
+      const isFirstLoad = photoUrls.length === 0;
       for (const url of candidates) {
-        if (bgUrls.has(url)) continue;
+        if (photoUrlSet.has(url)) continue;
         const ok = await probeImage(url);
         if (ok) {
-          bgUrls.add(url);
-          addBgLayer(url);
+          photoUrlSet.add(url);
+          photoUrls.push(url);
         }
+      }
+      if (isFirstLoad && photoUrls.length > 0) {
+        photoOrder = buildPhotoOrder(null);
+        photoOrderIndex = 0;
+        showNextPhoto();
       }
       ensureBgRotation();
     }
@@ -982,17 +1008,28 @@
       return order;
     }
 
+    // Los navegadores bloquean el autoplay CON sonido sin interacción del
+    // usuario, pero el autoplay MUTEADO siempre está permitido — y una vez
+    // que ya está sonando, sacarle el mute (aunque sea sin click) no cuenta
+    // como "iniciar" reproducción, así que no lo bloquean. Por eso el primer
+    // tema arranca muteado a propósito y se desmutea solo apenas se confirma
+    // que empezó a sonar (evento "playing" más abajo): así la música arranca
+    // sola, con sonido, sin depender de que alguien haga click primero.
+    let autoUnmutePending = true;
+
     function playCurrent() {
       if (playOrder.length === 0) return;
       const file = playOrder[orderIndex];
       player.src = MUSIC_FOLDER + file;
       showNowPlaying(file);
+      if (autoUnmutePending) player.muted = true;
       const playPromise = player.play();
       if (playPromise && typeof playPromise.catch === "function") {
         playPromise.catch(() => {
-          // Autoplay con sonido bloqueado por el navegador: no hay nada
-          // más que hacer acá, se retoma solo con el próximo click en el
-          // botón de silenciar/activar (ver muteToggleBtn más abajo).
+          // Ni siquiera el autoplay muteado se pudo iniciar (política muy
+          // estricta del navegador): no hay nada más que hacer acá, se
+          // retoma solo con el próximo click en el botón de
+          // silenciar/activar (ver muteToggleBtn más abajo).
         });
       }
     }
@@ -1021,6 +1058,11 @@
 
     player.addEventListener("playing", () => {
       consecutiveTrackErrors = 0;
+      if (autoUnmutePending) {
+        autoUnmutePending = false;
+        player.muted = false;
+        updateMuteIcon();
+      }
     });
 
     player.addEventListener("error", () => {

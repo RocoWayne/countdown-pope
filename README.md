@@ -91,8 +91,10 @@ Ninguna de las dos formas modifica el archivo ni el repositorio.
 
 ## Hardening para transmisiones largas (60+ días corridos)
 
-- **Tope de memoria en el carrusel** (`MAX_BG_LAYERS = 20`): al superar
-  el tope, se sacan del DOM las fotos más viejas.
+- **Memoria acotada en el carrusel sin tope de fotos**: todas las fotos de
+  `/images` entran al sorteo (aleatorio, sin repetir hasta agotarlas), pero
+  solo hay 2 `<div>` de fondo en el DOM en todo momento (cross-fade) — la
+  memoria no crece aunque se sigan sumando fotos día a día.
 - **Timeout de red** (`FETCH_TIMEOUT_MS = 15000`): todos los `fetch()` de
   manifests/trivia/cta y la carga de cada imagen se cortan solos si
   tardan de más, para que un cuelgue puntual no bloquee el resto.
